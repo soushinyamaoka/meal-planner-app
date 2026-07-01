@@ -1,0 +1,30 @@
+# 依存パッケージ
+node_modules/
+
+# 環境変数（機密情報を含むため絶対にコミットしない）
+.env
+.env.local
+.env.*.local
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# ネイティブビルド
+android/
+ios/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ログ
+*.log
+npm-debug.log*
+
+# Claude Code
+.claude/
+
+# その他
+todo.txt
