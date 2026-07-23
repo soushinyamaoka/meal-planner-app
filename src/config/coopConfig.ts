@@ -29,8 +29,13 @@ export function getDefaultApiSettings(): { coopUrl: string; coopToken: string; w
 
 export async function getWebApiUrl(): Promise<string> {
   const storedUrl = await SecureStore.getItemAsync(KEY_WEB_URL);
-  const url = storedUrl ?? INITIAL_WEB_URL;
-  if (!storedUrl) await SecureStore.setItemAsync(KEY_WEB_URL, url);
+  // 初回起動時に保存された平文httpの接続先は、HTTPS移行により到達不可となる。
+  // 既定値がhttpsの場合に限り失効とみなし、環境変数由来の既定へ移行する。
+  // （利用者がhttpsで独自設定した値は保持する）
+  const isStale =
+    !!storedUrl && storedUrl.startsWith('http://') && INITIAL_WEB_URL.startsWith('https://');
+  const url = !storedUrl || isStale ? INITIAL_WEB_URL : storedUrl;
+  if (!storedUrl || isStale) await SecureStore.setItemAsync(KEY_WEB_URL, url);
   return url;
 }
 
