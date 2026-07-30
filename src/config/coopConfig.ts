@@ -14,10 +14,15 @@ export async function getCoopConfig(): Promise<{ url: string; token: string }> {
   const storedUrl = await SecureStore.getItemAsync(KEY_COOP_URL);
 
   const token = storedToken ?? INITIAL_TOKEN;
-  const url = storedUrl ?? INITIAL_COOP_URL;
+  // 初回起動時に保存された平文httpの接続先は、HTTPS移行により到達不可となる。
+  // 既定値がhttpsの場合に限り失効とみなし、環境変数由来の既定へ移行する。
+  // （利用者がhttpsで独自設定した値は保持する）
+  const isStale =
+    !!storedUrl && storedUrl.startsWith('http://') && INITIAL_COOP_URL.startsWith('https://');
+  const url = !storedUrl || isStale ? INITIAL_COOP_URL : storedUrl;
 
   if (!storedToken) await SecureStore.setItemAsync(KEY_TOKEN, token);
-  if (!storedUrl) await SecureStore.setItemAsync(KEY_COOP_URL, url);
+  if (!storedUrl || isStale) await SecureStore.setItemAsync(KEY_COOP_URL, url);
 
   return { url, token };
 }
