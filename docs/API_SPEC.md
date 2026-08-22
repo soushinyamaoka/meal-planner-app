@@ -88,7 +88,7 @@
 
 ## POST /api/coop/fetch
 
-Gmail IMAPからCOOP注文確認メールを取得してJSONに保存する。通常はcronで自動実行（毎日7時・20時）。
+Gmail IMAPからCOOP注文確認メールを取得してJSONに保存する。通常はサーバー側のscheduled worker（`fetch_coop_mail.py`）が毎日 07:00 / 20:00 JST に自動実行するよう設定されているため、アプリから手動で呼ぶ必要は通常ない。
 
 **クエリパラメータ**
 
