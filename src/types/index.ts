@@ -39,6 +39,10 @@ export type MenuItem = {
 
 export type Menus = Record<string, MenuItem[]>;
 
+export type NurseryMenuDay = { menu: string[]; snack: string[] };
+export type NurseryMenus = Record<string, NurseryMenuDay>;
+export type NurseryMenuParseResult = { year: number; month: number; days: NurseryMenus };
+
 export type CoopItem = {
   order_no: string;
   name: string;

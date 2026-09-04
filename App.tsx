@@ -9,10 +9,11 @@ import { StatusBar } from "expo-status-bar";
 import { getDateKey, getDayLabel, formatDate, genFutureDates, genArchiveDates, getEmoji, genId, getGreeting } from "./src/utils/helpers";
 import { searchRecipeFromWeb, fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopMealPlan, fetchRecipeTitle, extractRecipe } from "./src/api";
 import { COOP_CATEGORIES } from "./src/data/sampleData";
-import { Recipe, RecipeFormData, MenuItem, Menus, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem, ModalState, WebSearchItem, RecipeCategory } from "./src/types";
+import { Recipe, RecipeFormData, MenuItem, Menus, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem, ModalState, WebSearchItem, RecipeCategory, NurseryMenus } from "./src/types";
 import { useAuth } from "./src/hooks/useAuth";
 import { useHousehold } from "./src/hooks/useHousehold";
 import { useFirestore } from "./src/hooks/useFirestore";
+import { useNurseryMenus } from "./src/hooks/useNurseryMenus";
 import LoginScreen from "./src/screens/LoginScreen";
 import { HouseholdSetupScreen, HouseholdSettingsPanel, ApiSettingsPanel } from "./src/screens/HouseholdScreen";
 
@@ -23,8 +24,9 @@ export default function App() {
   const { user, loading: authLoading, authLoading: signingIn, error: authError, setError: clearAuthError, signIn, signUp, resetPassword, logout } = useAuth();
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
   const { menus, setMenus, recipes, setRecipes, categories, setCategories, loadingData, loadError: dataError } = useFirestore(household?.id ?? null);
+  const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
 
-  const [tab, setTab] = useState<"meals" | "recipes" | "coop" | "settings">("meals");
+  const [tab, setTab] = useState<"meals" | "recipes" | "coop" | "settings" | "nursery">("meals");
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | "new" | "websearch" | null>(null);
   const [viewRecipe, setViewRecipe] = useState<Recipe | null>(null);
@@ -176,13 +178,14 @@ export default function App() {
       <View style={s.tabBar}>
         {[
           { key: "meals", icon: "📅", label: "献立" },
+          { key: "nursery", icon: "🍱", label: "給食" },
           { key: "recipes", icon: "📖", label: "レシピ" },
           { key: "coop", icon: "🛒", label: "COOP" },
           { key: "settings", icon: "👥", label: "設定" },
         ].map(t => (
           <TouchableOpacity key={t.key} style={[s.tabBtn, tab === t.key && s.tabActive]}
             activeOpacity={0.7}
-            onPress={() => { setTab(t.key as "meals" | "recipes" | "coop" | "settings"); clearModals(); }}>
+            onPress={() => { setTab(t.key as "meals" | "recipes" | "coop" | "settings" | "nursery"); clearModals(); }}>
             <Text style={[s.tabIcon, tab === t.key && s.tabIconActive]}>{t.icon}</Text>
             <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>{t.label}</Text>
           </TouchableOpacity>
@@ -194,6 +197,13 @@ export default function App() {
         <MealsTab menus={menus} setMenus={setMenus} recipes={recipes}
           onChipTap={handleChipTap}
           onManualAdd={(dateKey) => setModalState({ mode: "create-for-meal", dateKey, prefillName: "" })} />
+      )}
+      {tab === "nursery" && (
+        <NurseryMenuTab
+          nurseryMenus={nurseryMenus}
+          loading={loadingNurseryMenus}
+          error={nurseryMenuError}
+        />
       )}
       {tab === "recipes" && (
         <RecipesTab recipes={recipes} setRecipes={setRecipes}
@@ -547,6 +557,153 @@ function MealsTab({ menus, setMenus, recipes, onChipTap, onManualAdd }: MealsTab
           onSelect={handleMoveItem}
           onClose={() => setMoveItem(null)} />
       )}
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════
+// Nursery Menu Tab（給食タブ・読み取り専用）
+// ═══════════════════════════════════════════
+// データはscripts/importNurseryMenu.mjsが書き込む。このタブは表示のみ行い、
+// 追加・編集・重複チェックは持たない（自宅献立との突き合わせはユーザーの目視判断に委ねる）。
+type NurseryMenuTabProps = {
+  nurseryMenus: NurseryMenus;
+  loading: boolean;
+  error: string | null;
+};
+
+function NurseryMenuTab({ nurseryMenus, loading, error }: NurseryMenuTabProps) {
+  const months = Array.from(new Set(Object.keys(nurseryMenus).map(k => k.slice(0, 7)))).sort();
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const today = new Date();
+  const todayKey = getDateKey(today);
+  const todayMenu = nurseryMenus[todayKey];
+  const { month: todayMonth, day: todayDay, weekday: todayWeekday } = formatDate(today);
+
+  useEffect(() => {
+    if (months.length > 0 && (!selectedMonth || !months.includes(selectedMonth))) {
+      setSelectedMonth(months[months.length - 1]);
+    }
+  }, [months.join(",")]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color="#d4725c" />
+        <Text style={{ color: "#a08979", marginTop: 12, fontSize: 14 }}>給食データを読み込み中...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ fontSize: 28 }}>⚠️</Text>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#c0564e", marginTop: 8 }}>{error}</Text>
+      </View>
+    );
+  }
+
+  if (months.length === 0) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ fontSize: 28 }}>🍱</Text>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#6a5d50", marginTop: 8 }}>まだ給食データがありません</Text>
+      </View>
+    );
+  }
+
+  const dateKeys = Object.keys(nurseryMenus)
+    .filter(k => k.startsWith(selectedMonth ?? "") && k !== todayKey)
+    .sort();
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: 14, paddingTop: 14 }}>
+        <View style={s.hero}>
+          <View style={s.heroRow}>
+            <Text style={s.heroTag}>🍱 今日の給食</Text>
+            <View style={s.heroDate}>
+              <Text style={s.heroDateText}>{todayMonth}/{todayDay} ({todayWeekday})</Text>
+            </View>
+          </View>
+
+          {todayMenu ? (
+            <>
+              {todayMenu.menu.length > 0 && (
+                <View style={s.heroMeals}>
+                  {todayMenu.menu.map((name, i) => (
+                    <View key={i} style={s.heroMeal}>
+                      <Text style={{ fontSize: 26 }}>{getEmoji(name)}</Text>
+                      <Text style={s.heroMealName}>{name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {todayMenu.snack.length > 0 && (
+                <View style={s.chipWrap}>
+                  {todayMenu.snack.map((name, i) => (
+                    <View key={i} style={[s.chip, { backgroundColor: "#f5f0e8" }]}>
+                      <Text style={{ fontSize: 11, color: "#8a7e72" }}>おやつ:</Text>
+                      <Text style={s.chipText}>{name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          ) : (
+            <Text style={s.heroEmpty}>今日の給食データはまだありません</Text>
+          )}
+        </View>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 10, gap: 8 }}>
+        {months.map((m) => {
+          const [y, mo] = m.split("-");
+          const active = m === selectedMonth;
+          return (
+            <TouchableOpacity key={m} style={[s.filterChip, active && s.filterChipActive]} onPress={() => setSelectedMonth(m)}>
+              <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{y}年{parseInt(mo, 10)}月</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingTop: 4, paddingBottom: 40 }}>
+        {dateKeys.map((dateKey) => {
+          const day = nurseryMenus[dateKey];
+          const { month, day: dayNum, weekday } = formatDate(new Date(dateKey + "T00:00:00"));
+          return (
+            <View key={dateKey} style={s.card}>
+              <View style={s.dateSection}>
+                <Text style={s.dateNum}>{dayNum}</Text>
+                <Text style={{ fontSize: 10, color: "#b8a594" }}>{month}月 ({weekday})</Text>
+              </View>
+              <View style={s.menuSection}>
+                {day.menu.length > 0 && (
+                  <View style={s.chipWrap}>
+                    {day.menu.map((name, i) => (
+                      <View key={i} style={s.chip}>
+                        <Text style={{ fontSize: 14 }}>{getEmoji(name)}</Text>
+                        <Text style={s.chipText}>{name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {day.snack.length > 0 && (
+                  <View style={s.chipWrap}>
+                    {day.snack.map((name, i) => (
+                      <View key={i} style={[s.chip, { backgroundColor: "#f5f0e8" }]}>
+                        <Text style={{ fontSize: 11, color: "#8a7e72" }}>おやつ:</Text>
+                        <Text style={s.chipText}>{name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
