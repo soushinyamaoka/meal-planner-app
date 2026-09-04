@@ -36,6 +36,7 @@ export default {
       "expo-asset",
       "expo-font",
       "expo-secure-store",
+      "expo-status-bar",
       "expo-web-browser",
     ],
     extra: {
