@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, documentId, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../config/firebaseConfig";
 import { NurseryMenus } from "../types";
 
@@ -23,6 +23,13 @@ function isValidDateKey(value: string): boolean {
     && date.getUTCDate() === day;
 }
 
+function toDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * 保育園献立(households/{householdId}/nurseryMenus)をFirestoreとリアルタイム同期するHook
  *
@@ -44,8 +51,17 @@ export function useNurseryMenus(householdId: string | null) {
     setNurseryMenus({});
     setNurseryMenuError(null);
 
-    const unsub = onSnapshot(
+    const today = new Date();
+    const startKey = toDateKey(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+    const endKey = toDateKey(new Date(today.getFullYear(), today.getMonth() + 2, 0));
+    const nurseryMenusQuery = query(
       collection(db, `households/${householdId}/nurseryMenus`),
+      where(documentId(), ">=", startKey),
+      where(documentId(), "<=", endKey)
+    );
+
+    const unsub = onSnapshot(
+      nurseryMenusQuery,
       (snap) => {
         const data: NurseryMenus = {};
         snap.docs.forEach((d) => {

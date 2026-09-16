@@ -575,6 +575,9 @@ type NurseryMenuTabProps = {
 function NurseryMenuTab({ nurseryMenus, loading, error }: NurseryMenuTabProps) {
   const months = Array.from(new Set(Object.keys(nurseryMenus).map(k => k.slice(0, 7)))).sort();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const dateListRef = useRef<ScrollView>(null);
+  const dateCardPositionsRef = useRef<Record<string, number>>({});
+  const hasInitialScrolledRef = useRef(false);
   const today = new Date();
   const todayKey = getDateKey(today);
   const todayMenu = nurseryMenus[todayKey];
@@ -582,9 +585,32 @@ function NurseryMenuTab({ nurseryMenus, loading, error }: NurseryMenuTabProps) {
 
   useEffect(() => {
     if (months.length > 0 && (!selectedMonth || !months.includes(selectedMonth))) {
-      setSelectedMonth(months[months.length - 1]);
+      const currentMonth = todayKey.slice(0, 7);
+      setSelectedMonth(months.includes(currentMonth) ? currentMonth : months[months.length - 1]);
     }
   }, [months.join(",")]);
+
+  const dateKeys = selectedMonth
+    ? Object.keys(nurseryMenus)
+      .filter(k => k.startsWith(selectedMonth) && k !== todayKey)
+      .sort()
+    : [];
+  const initialScrollDateKey = dateKeys.find(dateKey => dateKey >= todayKey)
+    ?? dateKeys[dateKeys.length - 1];
+
+  useEffect(() => {
+    if (selectedMonth && dateKeys.length === 0) {
+      hasInitialScrolledRef.current = true;
+    }
+  }, [selectedMonth, dateKeys.length]);
+
+  const scrollToInitialDate = (dateKey: string, y: number) => {
+    dateCardPositionsRef.current[dateKey] = y;
+    if (hasInitialScrolledRef.current || dateKey !== initialScrollDateKey) return;
+
+    dateListRef.current?.scrollTo({ y: dateCardPositionsRef.current[dateKey], animated: false });
+    hasInitialScrolledRef.current = true;
+  };
 
   if (loading) {
     return (
@@ -612,10 +638,6 @@ function NurseryMenuTab({ nurseryMenus, loading, error }: NurseryMenuTabProps) {
       </View>
     );
   }
-
-  const dateKeys = Object.keys(nurseryMenus)
-    .filter(k => k.startsWith(selectedMonth ?? "") && k !== todayKey)
-    .sort();
 
   return (
     <View style={{ flex: 1 }}>
@@ -662,18 +684,21 @@ function NurseryMenuTab({ nurseryMenus, loading, error }: NurseryMenuTabProps) {
           const [y, mo] = m.split("-");
           const active = m === selectedMonth;
           return (
-            <TouchableOpacity key={m} style={[s.filterChip, active && s.filterChipActive]} onPress={() => setSelectedMonth(m)}>
+            <TouchableOpacity key={m} style={[s.filterChip, active && s.filterChipActive]} onPress={() => {
+              hasInitialScrolledRef.current = true;
+              setSelectedMonth(m);
+            }}>
               <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{y}年{parseInt(mo, 10)}月</Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingTop: 4, paddingBottom: 40 }}>
+      <ScrollView ref={dateListRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingTop: 4, paddingBottom: 40 }}>
         {dateKeys.map((dateKey) => {
           const day = nurseryMenus[dateKey];
           const { month, day: dayNum, weekday } = formatDate(new Date(dateKey + "T00:00:00"));
           return (
-            <View key={dateKey} style={s.card}>
+            <View key={dateKey} style={s.card} onLayout={(event) => scrollToInitialDate(dateKey, event.nativeEvent.layout.y)}>
               <View style={s.dateSection}>
                 <Text style={s.dateNum}>{dayNum}</Text>
                 <Text style={{ fontSize: 10, color: "#b8a594" }}>{month}月 ({weekday})</Text>
