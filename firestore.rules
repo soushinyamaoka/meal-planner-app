@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function isMember(householdId) {
+      return isAuthed() &&
+        request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+    }
+
+    function myInviteRef() {
+      return /databases/$(database)/documents/invites/$(request.auth.token.email);
+    }
+
+    // 自分宛の招待が、指定の世帯を指しているか
+    function isInvitedTo(householdId) {
+      return isAuthed()
+        && request.auth.token.email != null
+        && exists(myInviteRef())
+        && get(myInviteRef()).data.householdId == householdId;
+    }
+
+    // ユーザードキュメント: 本人のみ
+    match /users/{userId} {
+      allow read, write: if isAuthed() && request.auth.uid == userId;
+    }
+
+    match /households/{householdId} {
+      // 招待されたユーザーも読めるようにする（参加フローの存在確認に必要）
+      allow read: if isAuthed() && (
+        request.auth.uid in resource.data.members ||
+        isInvitedTo(householdId)
+      );
+
+      // 作成時は自分1人だけをメンバーにできる
+      allow create: if isAuthed()
+        && request.resource.data.members == [request.auth.uid];
+
+      allow update: if isAuthed() && (
+        request.auth.uid in resource.data.members ||
+        (
+          // 招待されたユーザーは「自分をメンバーに追加する」以外の変更をできない
+          isInvitedTo(householdId)
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.members.toSet() ==
+             resource.data.members.toSet().union([request.auth.uid].toSet())
+        )
+      );
+
+      // 世帯の削除はアプリから行わないため許可しない
+
+      // サブコレクション (menus / recipes / categories / nurseryMenus): メンバーのみ
+      match /{document=**} {
+        allow read, write: if isMember(householdId);
+      }
+    }
+
+    match /invites/{email} {
+      // 読み取り・削除は本人宛のみ
+      allow read, delete: if isAuthed() && request.auth.token.email == email;
+
+      // 作成・更新は「自分が既にメンバーである世帯」への招待に限る
+      allow create, update: if isAuthed()
+        && isMember(request.resource.data.householdId)
+        && request.resource.data.invitedBy == request.auth.uid;
+    }
+  }
+}

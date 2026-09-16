@@ -235,15 +235,6 @@ export function useHousehold(user: AppUser | null) {
       throw new Error("このメールアドレスは既に招待済みです。");
     }
 
-    // 別グループから招待が残っていないか確認
-    const existingInviteSnap = await getDoc(doc(db, INVITES_COL, normalizedEmail));
-    if (existingInviteSnap.exists()) {
-      const existing = existingInviteSnap.data() as PendingInvite;
-      if (existing.householdId !== household.id) {
-        throw new Error("このメールアドレスには既に別グループからの招待が送られています。");
-      }
-    }
-
     const invite: HouseholdInvite = {
       email: normalizedEmail,
       invitedBy: user.uid,
