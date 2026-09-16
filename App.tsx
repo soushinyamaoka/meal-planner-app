@@ -23,7 +23,7 @@ import { HouseholdSetupScreen, HouseholdSettingsPanel, ApiSettingsPanel } from "
 export default function App() {
   const { user, loading: authLoading, authLoading: signingIn, error: authError, setError: clearAuthError, signIn, signUp, resetPassword, logout } = useAuth();
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
-  const { menus, setMenus, recipes, setRecipes, categories, setCategories, loadingData, loadError: dataError } = useFirestore(household?.id ?? null);
+  const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, loadingData, loadError: dataError } = useFirestore(household?.id ?? null);
   const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
 
   const [tab, setTab] = useState<"meals" | "recipes" | "coop" | "settings" | "nursery">("meals");
@@ -107,15 +107,17 @@ export default function App() {
   const handleModalSaveRecipe = (savedRecipe: RecipeFormData): void => {
     const id = savedRecipe.id ?? genId();
     const full: Recipe = { ...savedRecipe, id };
-    if (!savedRecipe.id) setRecipes(p => [...p, full]);
-    else setRecipes(p => p.map(r => r.id === id ? full : r));
     if (modalState?.menuRef) {
       const { dateKey, index } = modalState.menuRef;
-      setMenus(p => {
-        const items = [...(p[dateKey] || [])];
+      saveRecipeWithMenu(full, dateKey, (currentItems) => {
+        const items = [...currentItems];
         if (items[index]) items[index] = { ...items[index], id: items[index].id ?? genId(), name: full.name, recipeId: id };
-        return { ...p, [dateKey]: items };
+        return items;
       });
+    } else if (!savedRecipe.id) {
+      setRecipes(p => [...p, full]);
+    } else {
+      setRecipes(p => p.map(r => r.id === id ? full : r));
     }
     setModalState({ mode: "view", recipe: full, menuRef: modalState?.menuRef });
   };
@@ -149,8 +151,10 @@ export default function App() {
     const full: Recipe = saveAsRecipe
       ? { ...savedRecipe, id }
       : { ...savedRecipe, id, showInList: false };
-    setRecipes(p => [...p, full]);
-    setMenus(p => ({ ...p, [dateKey]: [...(p[dateKey] || []), { id: genId(), name: full.name, recipeId: id }] }));
+    saveRecipeWithMenu(full, dateKey, (items) => [
+      ...items,
+      { id: genId(), name: full.name, recipeId: id },
+    ]);
     setModalState(null);
   };
 

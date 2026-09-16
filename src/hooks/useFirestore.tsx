@@ -1,16 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   collection,
+  documentId,
   doc,
   setDoc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../config/firebaseConfig";
 import { Recipe, Menus, RecipeCategory, MenuItem } from "../types";
 import { defaultRecipeCategories } from "../data/sampleData";
-import { ARCHIVE_DAYS, getDateKey } from "../utils/helpers";
+import { ARCHIVE_DAYS, DAYS_AFTER, getDateKey } from "../utils/helpers";
 
 /** Firestoreに書き込む前に undefined のフィールドを除去する */
 function stripUndefined<T extends object>(obj: T): Partial<T> {
@@ -48,19 +51,25 @@ export function useFirestore(householdId: string | null) {
       setLoadingData(false);
     };
 
-    const unsubMenus = onSnapshot(
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - ARCHIVE_DAYS);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + DAYS_AFTER);
+    const menusQuery = query(
       collection(db, `${base}/menus`),
+      where(documentId(), ">=", getDateKey(startDate)),
+      where(documentId(), "<=", getDateKey(endDate))
+    );
+
+    const unsubMenus = onSnapshot(
+      menusQuery,
       (snap) => {
         const data: Menus = {};
         snap.docs.forEach((d) => { data[d.id] = (d.data().items ?? []) as MenuItem[]; });
-        setMenusLocal((prev) => {
-          // Firestoreにまだ反映されていないローカル追加分を保持してマージ
-          const merged: Menus = { ...data };
-          Object.keys(prev).forEach((dateKey) => {
-            if (!(dateKey in data)) merged[dateKey] = prev[dateKey];
-          });
-          return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
-        });
+        setMenusLocal((prev) =>
+          JSON.stringify(prev) === JSON.stringify(data) ? prev : data
+        );
       },
       handleSnapshotError("menus")
     );
@@ -69,12 +78,9 @@ export function useFirestore(householdId: string | null) {
       collection(db, `${base}/recipes`),
       (snap) => {
         const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Recipe));
-        setRecipesLocal((prev) => {
-          // Firestoreにまだ反映されていないローカル追加分を保持してマージ
-          const pending = prev.filter((p) => !data.find((d) => d.id === p.id));
-          const merged = [...data, ...pending];
-          return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
-        });
+        setRecipesLocal((prev) =>
+          JSON.stringify(prev) === JSON.stringify(data) ? prev : data
+        );
       },
       handleSnapshotError("recipes")
     );
@@ -120,7 +126,7 @@ export function useFirestore(householdId: string | null) {
     staleRecipes.forEach((recipe) => {
       const refDates = Object.entries(menus)
         .filter(([, items]) => items.some((item) => item.recipeId === recipe.id))
-        // ローカルタイムの0時として解釈（cleanOldMenusと統一。UTC解釈による日跨ぎズレを防ぐ）
+        // ローカルタイムの0時として解釈し、UTC解釈による日跨ぎズレを防ぐ
         .map(([dateKey]) => new Date(dateKey + "T00:00:00"));
 
       const allExpired =
@@ -152,6 +158,46 @@ export function useFirestore(householdId: string | null) {
       setDoc(ref, { items }).catch(console.error);
     }
   };
+
+  // ─── レシピと献立を同一バッチで保存 ──────────────────────────────────────────
+  const saveRecipeWithMenu = useCallback(
+    (recipe: Recipe, dateKey: string, updateItems: (items: MenuItem[]) => MenuItem[]): void => {
+      setRecipesLocal((prev) => {
+        const index = prev.findIndex((item) => item.id === recipe.id);
+        if (index === -1) return [...prev, recipe];
+        const next = [...prev];
+        next[index] = recipe;
+        return next;
+      });
+
+      setMenusLocal((prev) => {
+        const items = updateItems(prev[dateKey] ?? []);
+        const next = { ...prev };
+        if (items.length === 0) delete next[dateKey];
+        else next[dateKey] = items;
+
+        if (householdId) {
+          const batch = writeBatch(db);
+          const { id, ...recipeData } = recipe;
+          batch.set(
+            doc(db, `households/${householdId}/recipes`, id),
+            stripUndefined(recipeData)
+          );
+
+          const menuRef = doc(db, `households/${householdId}/menus`, dateKey);
+          if (items.length === 0) {
+            batch.delete(menuRef);
+          } else {
+            batch.set(menuRef, stripUndefined({ items }));
+          }
+          batch.commit().catch(console.error);
+        }
+
+        return next;
+      });
+    },
+    [householdId]
+  );
 
   // ─── setMenus（React.Dispatch互換） ─────────────────────────────────────────
   const setMenus = useCallback(
@@ -255,5 +301,6 @@ export function useFirestore(householdId: string | null) {
     setMenus,
     setRecipes,
     setCategories,
+    saveRecipeWithMenu,
   };
 }

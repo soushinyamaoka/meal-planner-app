@@ -94,14 +94,3 @@ export function getEmoji(t: string): string {
 export function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
-
-// ─── Data Cleanup ───
-export function cleanOldMenus<T>(menus: Record<string, T[]>): Record<string, T[]> {
-  const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - ARCHIVE_DAYS);
-  const r: Record<string, T[]> = {};
-  for (const [k, v] of Object.entries(menus)) {
-    if (new Date(k + "T00:00:00") >= cutoff) r[k] = v;
-  }
-  return r;
-}
