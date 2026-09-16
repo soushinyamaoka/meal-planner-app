@@ -14,6 +14,7 @@ import { useAuth } from "./src/hooks/useAuth";
 import { useHousehold } from "./src/hooks/useHousehold";
 import { useFirestore } from "./src/hooks/useFirestore";
 import { useNurseryMenus } from "./src/hooks/useNurseryMenus";
+import { clearHouseholdCache } from "./src/utils/localCache";
 import LoginScreen from "./src/screens/LoginScreen";
 import { HouseholdSetupScreen, HouseholdSettingsPanel, ApiSettingsPanel } from "./src/screens/HouseholdScreen";
 
@@ -25,6 +26,11 @@ export default function App() {
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
   const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, loadingData, loadError: dataError } = useFirestore(household?.id ?? null);
   const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
+
+  const handleLogout = async (): Promise<void> => {
+    if (household?.id) await clearHouseholdCache(household.id);
+    await logout();
+  };
 
   const [tab, setTab] = useState<"meals" | "recipes" | "coop" | "settings" | "nursery">("meals");
   const [modalState, setModalState] = useState<ModalState | null>(null);
@@ -45,7 +51,7 @@ export default function App() {
         </Text>
         <TouchableOpacity
           style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: "#f5ebe2", borderRadius: 10 }}
-          onPress={logout}
+          onPress={handleLogout}
         >
           <Text style={{ color: "#8a7e72", fontSize: 13 }}>ログアウト</Text>
         </TouchableOpacity>
@@ -87,7 +93,7 @@ export default function App() {
         onCreateHousehold={createHousehold}
         onJoinHousehold={joinHousehold}
         onDeclineInvite={declineInvite}
-        onLogout={logout}
+        onLogout={handleLogout}
       />
     );
   }
@@ -228,7 +234,7 @@ export default function App() {
             onInvite={inviteByEmail}
             onJoinHousehold={joinHousehold}
             onDeclineInvite={declineInvite}
-            onLogout={logout}
+            onLogout={handleLogout}
           >
             <ApiSettingsPanel />
           </HouseholdSettingsPanel>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, documentId, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../config/firebaseConfig";
 import { NurseryMenus } from "../types";
+import { readLocalCache, writeLocalCacheDebounced } from "../utils/localCache";
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value)
@@ -50,6 +51,16 @@ export function useNurseryMenus(householdId: string | null) {
     setLoadingNurseryMenus(true);
     setNurseryMenus({});
     setNurseryMenuError(null);
+    let active = true;
+    let snapshotReceived = false;
+
+    void readLocalCache<NurseryMenus>(householdId, "nurseryMenus").then((cachedMenus) => {
+      if (!active) return;
+      if (!snapshotReceived && cachedMenus !== null) {
+        setNurseryMenus(cachedMenus);
+      }
+      setLoadingNurseryMenus(false);
+    });
 
     const today = new Date();
     const startKey = toDateKey(new Date(today.getFullYear(), today.getMonth() - 1, 1));
@@ -63,6 +74,8 @@ export function useNurseryMenus(householdId: string | null) {
     const unsub = onSnapshot(
       nurseryMenusQuery,
       (snap) => {
+        if (!active) return;
+        snapshotReceived = true;
         const data: NurseryMenus = {};
         snap.docs.forEach((d) => {
           if (!isValidDateKey(d.id)) return;
@@ -73,17 +86,22 @@ export function useNurseryMenus(householdId: string | null) {
           };
         });
         setNurseryMenus(data);
+        writeLocalCacheDebounced(householdId, "nurseryMenus", data);
         setNurseryMenuError(null);
         setLoadingNurseryMenus(false);
       },
       (err) => {
+        if (!active) return;
         console.error("[useNurseryMenus] snapshot error:", err.code);
         setNurseryMenuError("給食データの取得に失敗しました");
         setLoadingNurseryMenus(false);
       }
     );
 
-    return () => unsub();
+    return () => {
+      active = false;
+      unsub();
+    };
   }, [householdId]);
 
   return { nurseryMenus, loadingNurseryMenus, nurseryMenuError };

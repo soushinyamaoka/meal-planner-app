@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   documentId,
@@ -14,6 +14,7 @@ import { db } from "../config/firebaseConfig";
 import { Recipe, Menus, RecipeCategory, MenuItem } from "../types";
 import { defaultRecipeCategories } from "../data/sampleData";
 import { ARCHIVE_DAYS, DAYS_AFTER, getDateKey } from "../utils/helpers";
+import { readLocalCache, writeLocalCacheDebounced } from "../utils/localCache";
 
 /** Firestoreに書き込む前に undefined のフィールドを除去する */
 function stripUndefined<T extends object>(obj: T): Partial<T> {
@@ -34,18 +35,60 @@ export function useFirestore(householdId: string | null) {
   const [categories, setCategoriesLocal] = useState<RecipeCategory[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [menusServerConfirmedFor, setMenusServerConfirmedFor] = useState<string | null>(null);
+  const [recipesServerConfirmedFor, setRecipesServerConfirmedFor] = useState<string | null>(null);
+  const menusServerConfirmedRef = useRef<string | null>(null);
+  const recipesServerConfirmedRef = useRef<string | null>(null);
 
   // ─── Firestoreリスナー ───────────────────────────────────────────────────────
   useEffect(() => {
+    menusServerConfirmedRef.current = null;
+    recipesServerConfirmedRef.current = null;
+    setMenusServerConfirmedFor(null);
+    setRecipesServerConfirmedFor(null);
+
     if (!householdId) {
+      setMenusLocal({});
+      setRecipesLocal([]);
+      setCategoriesLocal([]);
       setLoadingData(false);
+      setLoadError(null);
       return;
     }
     setLoadingData(true);
     setLoadError(null);
+    setMenusLocal({});
+    setRecipesLocal([]);
+    setCategoriesLocal([]);
     const base = `households/${householdId}`;
+    let active = true;
+    const snapshotReceived = {
+      menus: false,
+      recipes: false,
+      categories: false,
+    };
+
+    void Promise.all([
+      readLocalCache<Menus>(householdId, "menus"),
+      readLocalCache<Recipe[]>(householdId, "recipes"),
+      readLocalCache<RecipeCategory[]>(householdId, "categories"),
+    ]).then(([cachedMenus, cachedRecipes, cachedCategories]) => {
+      if (!active) return;
+
+      if (!snapshotReceived.menus && cachedMenus !== null) {
+        setMenusLocal(cachedMenus);
+      }
+      if (!snapshotReceived.recipes && cachedRecipes !== null) {
+        setRecipesLocal(cachedRecipes);
+      }
+      if (!snapshotReceived.categories && cachedCategories !== null) {
+        setCategoriesLocal(cachedCategories);
+      }
+      setLoadingData(false);
+    });
 
     const handleSnapshotError = (label: string) => (err: unknown) => {
+      if (!active) return;
       console.error(`[useFirestore] ${label} snapshot error:`, err);
       setLoadError(`データの取得に失敗しました（${label}）`);
       setLoadingData(false);
@@ -64,50 +107,68 @@ export function useFirestore(householdId: string | null) {
 
     const unsubMenus = onSnapshot(
       menusQuery,
+      { includeMetadataChanges: true },
       (snap) => {
+        if (!active) return;
+        snapshotReceived.menus = true;
         const data: Menus = {};
         snap.docs.forEach((d) => { data[d.id] = (d.data().items ?? []) as MenuItem[]; });
         setMenusLocal((prev) =>
           JSON.stringify(prev) === JSON.stringify(data) ? prev : data
         );
+        writeLocalCacheDebounced(householdId, "menus", data);
+        if (!snap.metadata.fromCache) {
+          menusServerConfirmedRef.current = householdId;
+          setMenusServerConfirmedFor(householdId);
+        }
+        setLoadingData(false);
       },
       handleSnapshotError("menus")
     );
 
     const unsubRecipes = onSnapshot(
       collection(db, `${base}/recipes`),
+      { includeMetadataChanges: true },
       (snap) => {
+        if (!active) return;
+        snapshotReceived.recipes = true;
         const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Recipe));
         setRecipesLocal((prev) =>
           JSON.stringify(prev) === JSON.stringify(data) ? prev : data
         );
+        writeLocalCacheDebounced(householdId, "recipes", data);
+        if (!snap.metadata.fromCache) {
+          recipesServerConfirmedRef.current = householdId;
+          setRecipesServerConfirmedFor(householdId);
+        }
+        setLoadingData(false);
       },
       handleSnapshotError("recipes")
     );
 
     const unsubCategories = onSnapshot(
       collection(db, `${base}/categories`),
-      async (snap) => {
-        try {
-          if (snap.empty) {
-            await initDefaultCategories(householdId);
-            // 初期化後に新しいsnapshotが届くまでにロードは未完
-            // 次のsnapshotで通常パスに入る
-          } else {
-            const data = snap.docs.map((d) => ({ id: d.id, name: d.data().name as string }));
-            setCategoriesLocal((prev) =>
-              JSON.stringify(prev) === JSON.stringify(data) ? prev : data
-            );
-          }
-          setLoadingData(false);
-        } catch (e) {
-          handleSnapshotError("categories init")(e);
+      (snap) => {
+        if (!active) return;
+        snapshotReceived.categories = true;
+        const data = snap.docs.map((d) => ({ id: d.id, name: d.data().name as string }));
+        setCategoriesLocal((prev) =>
+          JSON.stringify(prev) === JSON.stringify(data) ? prev : data
+        );
+        writeLocalCacheDebounced(householdId, "categories", data);
+        setLoadingData(false);
+
+        if (snap.empty && !snap.metadata.fromCache) {
+          initDefaultCategories(householdId).catch(
+            handleSnapshotError("categories init")
+          );
         }
       },
       handleSnapshotError("categories")
     );
 
     return () => {
+      active = false;
       unsubMenus(); unsubRecipes(); unsubCategories();
     };
   }, [householdId]);
@@ -116,7 +177,14 @@ export function useFirestore(householdId: string | null) {
   // menus/recipes が更新されるたびに評価し、対象があれば削除する。
   // 削除後はonSnapshotでrecipesが更新され、stale条件を満たすものがなくなれば再帰せず収束する。
   useEffect(() => {
-    if (loadingData || !householdId) return;
+    if (
+      loadingData ||
+      !householdId ||
+      menusServerConfirmedRef.current !== householdId ||
+      recipesServerConfirmedRef.current !== householdId ||
+      menusServerConfirmedFor !== householdId ||
+      recipesServerConfirmedFor !== householdId
+    ) return;
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const archiveCutoff = new Date(today);
@@ -138,7 +206,7 @@ export function useFirestore(householdId: string | null) {
         // ローカル状態はonSnapshotで自動更新されるので明示的なsetは不要
       }
     });
-  }, [loadingData, householdId, recipes, menus]);
+  }, [loadingData, householdId, recipes, menus, menusServerConfirmedFor, recipesServerConfirmedFor]);
 
   // ─── デフォルトカテゴリ初期書き込み ────────────────────────────────────────
   const initDefaultCategories = async (hid: string): Promise<void> => {
