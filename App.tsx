@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Modal,
-  StyleSheet, SafeAreaView, ActivityIndicator, Linking, Animated,
+  StyleSheet, SafeAreaView, ActivityIndicator, Linking, Animated, Platform, StatusBar as NativeStatusBar,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { StatusBar } from "expo-status-bar";
@@ -17,6 +17,25 @@ import { useNurseryMenus } from "./src/hooks/useNurseryMenus";
 import { clearHouseholdCache } from "./src/utils/localCache";
 import LoginScreen from "./src/screens/LoginScreen";
 import { HouseholdSetupScreen, HouseholdSettingsPanel, ApiSettingsPanel } from "./src/screens/HouseholdScreen";
+import { useNoticesFeed } from "./src/hooks/useNoticesFeed";
+import { MaintenanceBanner, NoticeBell, NoticesModal } from "./src/components/Notices";
+
+const externalScreenTopInset = Platform.OS === "ios" ? 44 : NativeStatusBar.currentHeight ?? 24;
+function ExternalNoticeLayout({ children, feed, visible, onOpen, onClose }: {
+  children: React.ReactNode;
+  feed: ReturnType<typeof useNoticesFeed>;
+  visible: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <View style={{ flex: 1, backgroundColor: "#faf5ef" }}>
+      <View style={{ paddingTop: externalScreenTopInset }}><MaintenanceBanner feed={feed} onOpen={onOpen} /></View>
+      <View style={{ flex: 1, marginTop: -externalScreenTopInset }}>{children}</View>
+      <NoticesModal visible={visible} onClose={onClose} feed={feed} />
+    </View>
+  );
+}
 
 // ═══════════════════════════════════════════
 // Main App
@@ -26,6 +45,9 @@ export default function App() {
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
   const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, loadingData, loadError: dataError } = useFirestore(household?.id ?? null);
   const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
+  const notices = useNoticesFeed();
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  const openNotices = (): void => { notices.markVisibleRead(); setNoticesOpen(true); };
 
   const handleLogout = async (): Promise<void> => {
     if (household?.id) await clearHouseholdCache(household.id);
@@ -42,7 +64,9 @@ export default function App() {
   const fatalError = householdError || dataError;
   if (fatalError && user) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#faf5ef", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#faf5ef" }}>
+        <MaintenanceBanner feed={notices} onOpen={openNotices} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
         <StatusBar style="dark" />
         <Text style={{ fontSize: 32, marginBottom: 12 }}>⚠️</Text>
         <Text style={{ color: "#c0564e", fontSize: 14, textAlign: "center", marginBottom: 8 }}>{fatalError}</Text>
@@ -55,6 +79,8 @@ export default function App() {
         >
           <Text style={{ color: "#8a7e72", fontSize: 13 }}>ログアウト</Text>
         </TouchableOpacity>
+        </View>
+        <NoticesModal visible={noticesOpen} onClose={() => setNoticesOpen(false)} feed={notices} />
       </SafeAreaView>
     );
   }
@@ -62,10 +88,14 @@ export default function App() {
   // ─── 読み込み中 ───────────────────────────────────────────────────────────────
   if (authLoading || loadingHousehold || (household && loadingData)) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#faf5ef", alignItems: "center", justifyContent: "center" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#faf5ef" }}>
+        <MaintenanceBanner feed={notices} onOpen={openNotices} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <StatusBar style="dark" />
         <ActivityIndicator size="large" color="#d4725c" />
         <Text style={{ color: "#a08979", marginTop: 12, fontSize: 14 }}>読み込み中...</Text>
+        </View>
+        <NoticesModal visible={noticesOpen} onClose={() => setNoticesOpen(false)} feed={notices} />
       </SafeAreaView>
     );
   }
@@ -73,28 +103,32 @@ export default function App() {
   // ─── 未ログイン ───────────────────────────────────────────────────────────────
   if (!user) {
     return (
-      <LoginScreen
+      <ExternalNoticeLayout feed={notices} visible={noticesOpen} onOpen={openNotices} onClose={() => setNoticesOpen(false)}>
+        <LoginScreen
         onSignIn={signIn}
         onSignUp={signUp}
         onResetPassword={resetPassword}
         authLoading={signingIn}
         error={authError}
         onClearError={() => clearAuthError(null)}
-      />
+        />
+      </ExternalNoticeLayout>
     );
   }
 
   // ─── グループ未所属 ────────────────────────────────────────────────────────────
   if (!household) {
     return (
-      <HouseholdSetupScreen
+      <ExternalNoticeLayout feed={notices} visible={noticesOpen} onOpen={openNotices} onClose={() => setNoticesOpen(false)}>
+        <HouseholdSetupScreen
         user={user}
         pendingInvite={pendingInvite}
         onCreateHousehold={createHousehold}
         onJoinHousehold={joinHousehold}
         onDeclineInvite={declineInvite}
         onLogout={handleLogout}
-      />
+        />
+      </ExternalNoticeLayout>
     );
   }
 
@@ -182,7 +216,10 @@ export default function App() {
           <Text style={s.headerGreeting} numberOfLines={1}>{greeting.text} {greeting.emoji}</Text>
           <Text style={s.headerHouse} numberOfLines={1}>{household.name}</Text>
         </View>
+        <NoticeBell count={notices.unreadCount} onPress={openNotices} />
       </View>
+
+      <MaintenanceBanner feed={notices} onOpen={openNotices} />
 
       {/* Tabs */}
       <View style={s.tabBar}>
@@ -260,6 +297,7 @@ export default function App() {
           onSelect={(dk) => handleAddRecipeToMeal(addToMealRecipe, dk)}
           onClose={() => setAddToMealRecipe(null)} />
       )}
+      <NoticesModal visible={noticesOpen} onClose={() => setNoticesOpen(false)} feed={notices} />
     </SafeAreaView>
   );
 }
