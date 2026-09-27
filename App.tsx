@@ -959,11 +959,13 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
     try {
       // 1. VPSにメール取得を指示
       const fetchResult = await triggerCoopFetch(14);
-      if (fetchResult.status === "no_data") {
-        setError("新しい注文データが見つかりませんでした");
-        // no_dataでも既存データは表示し続ける
+      if (fetchResult.status === "no_data" || fetchResult.status === "busy") {
+        setError(fetchResult.status === "busy"
+          ? "別の取込処理を実行中です。しばらくしてから再度お試しください。"
+          : "新しい注文データが見つかりませんでした");
+        // no_data・busyでも既存データは表示し続ける
         if (!coopData) {
-          // 初回取得時でno_dataの場合は既存データを試みる
+          // 初回取得時でno_data・busyの場合は既存データを試みる
           try {
             const data = await fetchCoopIngredients();
             setCoopData(data);

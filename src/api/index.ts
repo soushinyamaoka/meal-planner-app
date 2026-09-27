@@ -110,9 +110,10 @@ export async function fetchRecipeTitle(url: string): Promise<string | null> {
  * POST /api/coop/fetch
  *
  * @param daysBack - 遡る日数（デフォルト14）
- * @returns { status: "success" | "no_data", message: string, orders?: number }
+ * @returns { status: "success" | "no_data" | "busy", message: string, orders?: number }
+ *   busy: 別の取込処理（定期取得など）が実行中のため、今回の取得は行われなかった
  */
-export async function triggerCoopFetch(daysBack: number = 14): Promise<{ status: "success" | "no_data"; message: string; orders?: number }> {
+export async function triggerCoopFetch(daysBack: number = 14): Promise<{ status: "success" | "no_data" | "busy"; message: string; orders?: number }> {
   const { url, token } = await getCoopConfig();
   const res = await fetchWithTimeout(`${url}/api/coop/fetch?days_back=${daysBack}`, {
     method: "POST",
