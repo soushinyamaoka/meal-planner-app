@@ -103,23 +103,31 @@ VPS上のcode・設定・配布物は今回変更していない。既存COOP AP
 
 ## 提出前セルフチェック
 
-正式な1回の提出前セルフチェックは、sourceとnoticeをremoteへpushした後、VPS管理への初回提出直前に実施する。この草案では未実施。現時点のread-only調査で、VPS正本にモバイルアプリbaselineがなく、client配信済み版と実EAS artifactが未確認と分かった。typecheckの初回失敗は修正・再実行で解消済み。
+2026-09-30 16:57 JST、初回提出前のセルフチェックを1回実施。正本はVPS管理repositoryの `docs/templates/application_ai_operations_instruction.md`（policy `2026-09-05.1`）、`docs/operations/application_change_notification_policy.md`、`docs/runtime-state/production_deployments.yaml`、`docs/templates/server_change_notice_pre_submission_checklist.md`。本モバイルアプリは配布版ポリシーの対象外なので、正本を直接読んだ。
+
+- [x] source `4facc8a98f5be987d168797831416e53ebdf6d7b` とnotice初版 `fd0057925756ded72073f5e9a85772c4b99997c0` を `main` にpushし、local・cached origin・実remoteが `fd0057925756ded72073f5e9a85772c4b99997c0` で一致、tracked dirty 0・untracked 0を確認した。本セルフチェック追記は後続の文書commitとしてpushし、実remoteを再照合する。
+- [x] 既知のrepository比較元 `20e7c90bb558f8e97f7da838cac127880b2ab1af` からsourceまでの1commit・8ファイル（アプリ3、文書4、`package.json`）を確認した。`package-lock.json`、`app.config.js`、`eas.json`、native設定、VPS deploy fileは不変。`package.json` はscriptのみ追加。source以降の2文書はnotice・client配信計画で、アプリbuild入力ではない。
+- [x] COOP APIのVPS正本baselineは `f26c2119ac5b3677916e5e4afe02242565a6da4f`。そのsourceに利用するGET・POST・PUT endpointが存在する。今回VPS code・env・起動・port・health・cron・log・配布経路は変更しない。L3は既存分類JSONへの書込開始によるdata影響、`production_change: uncertain` は並行更新対策の要否をVPS管理側へ確認するためと照合した。
+- [x] 空欄の元商品名・変更なしは端末側で保存不可。旧端末版は起動時POSTを継続し得る。端末内の同時リクエストは抑止し、分類PUTの結果不明時はGETのみ再試行する。別端末の同時PUTにはserver側のlost updateリスクが残る。献立一括追加は確認後も複数Firestore書込であり、途中失敗時の原子性はない。保存失敗は拒否後に表示し、保留中の書込成功は保証しない。
+- [x] COOP data全体はVPS管理の `OPS-BKP-04` の日次backup対象であり、分類JSONを含む。端末rollbackでは既書込分類は戻らない。隔離restore、現行dataの保全、書込停止、復元後の確認が必要で、実復元は未実施。Firestore側のbackup・rollbackは未確認。
+- [x] `npm run typecheck` はタスク008後に終了コード0。`git diff --check` は空白エラーなし。read-only preflightの機微値候補は0件。`.env` と生成物はGit除外され、source/notice commitに含まれない。`.env` の値は読んでいない。
+- [ ] VPS正本に本モバイルアプリのproduction baseline entryがなく、実端末の配信済みsourceも未確認。baselineからのclient release全差分は照合できない。`app.config.js` は `runtimeVersion.policy: sdkVersion`、EAS profileのchannel定義は確認したが、実際の対象branch・platform・native fingerprint・配布file一覧は未確認。`.easignore` はなく、EAS artifactへの `.env`・一時file非混入は未確認。
+- [ ] VPS管理のread-only `review_notice_preflight.ps1 -CheckActualRemote` は `blocked`。blockerは `notice_status_must_be_ready_for_review` と `production_baseline_commit_not_found`。後者を推測値で埋めず、本noticeを `draft` のままVPS管理側へ適用方法の判断を求める。production変更と端末配信は未実施。
 
 ## 未解決事項
 
-1. モバイルアプリの配信済みsource、対象EAS branch/channel、直前安定版、対象platform、native fingerprintの確認。VPS正本にモバイルアプリbaselineがないため、VPS稼働commitからのrelease差分という形では照合できない。
-2. source commitは上記へ固定した。noticeのcommit・pushと実remote一致確認は未実施。
-3. 実際のEAS配布file一覧の確認。`.env` は存在するがGitから除外済みで、内容は読んでいない。`.easignore` はない。EAS artifactへ `.env` や一時fileが入らないことは未確認。
-4. 分類PUTの並行更新、backupの直近状態、隔離復元、Firestore側rollback方針のVPS管理レビュー。
+1. VPS正本の本モバイルアプリbaselineが存在しないため、noticeのpreflightはblockされた。VPS管理側に、このclient連携noticeへbaseline entryを適用するか、別の受理方法とするか判断を依頼する。配信済みsourceと実EAS artifactの調査は端末配信担当Claudeへ引き継ぐ。
+2. EASへ実際に渡るfile一覧、`.env`・一時file非混入、配信branch/channel、対象platform、native fingerprint、直前安定版は未確認。端末配信前にClaudeが確認する。
+3. 分類PUTの並行更新、backupの直近状態、隔離復元、Firestore側rollback方針のVPS管理レビュー。server側対策が必要ならproduction変更として別途計画・承認する。
 
 ## 希望時期
 
-source固定と提出前セルフチェック後にVPS管理レビューを依頼する。端末配信時期は別承認で決める。
+source固定と提出前セルフチェックは完了。`draft` とpreflight blockerを明示してVPS管理へ適用方法の判断を依頼する。端末配信時期はClaudeが別途提示し、app ownerの個別承認で決める。
 
 ## VPS管理チャットへの引き継ぎ
 
 - 引き継ぎ要否: 必要。
-- ユーザーへの案内: 未実施。通知書が `ready_for_review` になった時点で提示する。
+- ユーザーへの案内: 本チャットの回答で、草案状態とpreflight blockerを明示して渡す。
 - VPS管理チャットへ渡すpath: `ops/server-change-notices/20260930-MEALPLANNER-001-summary.md`（repository相対path。最終案内ではローカル絶対pathを提示する）。
 
 ## Approval

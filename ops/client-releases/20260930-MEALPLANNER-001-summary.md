@@ -28,7 +28,7 @@ COOP APIのproduction baseline `f26c2119ac5b3677916e5e4afe02242565a6da4f` のsou
 
 1. タスク008の構文修正後、`npm run typecheck` は終了コード0で成功。配信直前に固定sourceとの差異を確認する。
 2. 配信済みsource、対象branch/channel、runtime、platform、直前安定版、native fingerprintと互換性を確認する。
-3. sourceは `4facc8a98f5be987d168797831416e53ebdf6d7b` に固定済み。noticeをcommit/pushし、実remoteと一致させる。VPS管理レビューで既存API・backup・rollbackの論点を確認する。
+3. source `4facc8a98f5be987d168797831416e53ebdf6d7b` とnotice初版は `main` へpush済みで、実remote一致を確認した。提出前セルフチェック追記のpushを確認し、VPS管理レビューで既存API・backup・rollbackの論点を確認する。VPS管理preflightはモバイルアプリbaseline未登録によりblockされており、扱いの判断を待つ。
 4. 対象releaseと配布先を示し、app ownerの端末配信に対する明示承認を別途得る。
 
 ## 配信・確認・rollback
