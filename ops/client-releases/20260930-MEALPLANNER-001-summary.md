@@ -29,7 +29,7 @@ VPS管理からCOOP APIの稼働commitを `f4259490f78f5b358a6eec938e86281148866
 
 1. タスク008の構文修正後、`npm run typecheck` は終了コード0で成功。配信直前に固定sourceとの差異を確認する。
 2. 配信済みsource、対象branch/channel、runtime、platform、直前安定版、native fingerprintと互換性を確認する。
-3. source `4facc8a98f5be987d168797831416e53ebdf6d7b` とnotice初版・セルフチェック追記は `main` へpush済み。VPS管理は通知を受け付け、現在 `blocked`。訂正版noticeの再レビュー結果を確認する。
+3. source `4facc8a98f5be987d168797831416e53ebdf6d7b` とnotice初版・セルフチェック追記は `main` へpush済み。VPS管理で通知が技術受理されたとの報告をユーザーから受領。モバイルbaseline未登録は手動審査で扱う。技術受理は端末配信の許可ではない。
 4. VPS管理側から、分類PUTの並行更新対策とCOOPバックアップの復旧・隔離復元の両方について完了報告を受ける。完了までEAS Update・新binary配布を行わない。
 5. 対象releaseと配布先を示し、app ownerの端末配信に対する明示承認を別途得る。
 
@@ -43,6 +43,6 @@ VPS管理からCOOP APIの稼働commitを `f4259490f78f5b358a6eec938e86281148866
 ## 承認と状態
 
 - app owner: Claudeへ端末配信を依頼する方針。対象releaseを特定した配信の個別承認は未取得。
-- VPS management review: notice `20260930-MEALPLANNER-001` を受け付け、現在 `blocked`。訂正後の再レビューと別作業の完了待ち。
+- VPS management review: notice `20260930-MEALPLANNER-001` は技術受理との報告をユーザーから受領。モバイルbaseline未登録は手動審査。分類PUT対策とCOOPバックアップ復旧・隔離復元の完了待ち。
 - VPS production approval: 該当する操作なし。
 - client distribution: not_started。

@@ -22,7 +22,7 @@ client_release_record: ops/client-releases/20260930-MEALPLANNER-001-summary.md
 
 ## 変更概要
 
-モバイルアプリ側の未反映改修 `20260930-002`〜`006`、JSX構文修正 `20260930-008`、文書・typecheck整備をまとめて知らせる。COOP APIへの呼出し順序と既存 `PUT /api/coop/classify` の利用開始がVPS管理上の主な論点。本noticeは提出前の草案。
+モバイルアプリ側の未反映改修 `20260930-002`〜`006`、JSX構文修正 `20260930-008`、文書・typecheck整備をまとめて知らせる。COOP APIへの呼出し順序と既存 `PUT /api/coop/classify` の利用開始がVPS管理上の主な論点。VPS管理から技術受理の報告を受けたが、端末配信は保留中。
 
 ## 変更理由
 
@@ -117,26 +117,28 @@ VPS上のcode・設定・配布物は今回変更していない。既存COOP AP
 
 指摘後の増分確認（前回の通知commit `0fcd24e8647fcc2fc8aecd178ea54ca5123e92f2`）: アプリsource `4facc8a98f5be987d168797831416e53ebdf6d7b` は不変。今回の変更は本noticeと端末配信計画の2文書のみ。COOP APIのローカルcommit `f4259490f78f5b358a6eec938e86281148866394` で利用endpointを確認し、稼働commitの訂正、`ready_for_review`、別作業の責務、端末配信保留を照合した。今回のcommitと実remoteの一致は再提出時の引き継ぎで示す。
 
+2026-09-30、VPS管理で本通知が技術受理されたとの報告をユーザーから受領。モバイルのproduction baseline未登録はVPS管理の手動審査で扱う。これは分類PUT対策・COOPバックアップ復旧と隔離復元の完了報告、production変更の承認、端末配信の承認を意味しない。今回の更新は受理状態と配信保留の記録に限り、アプリsourceは変更しない。
+
 ## 未解決事項
 
-1. VPS正本の本モバイルアプリbaselineは存在しない。VPS管理が本noticeを受け付け、statusを `ready_for_review` にするよう指示したため、nullのまま明記する。配信済みsourceと実EAS artifactの調査は端末配信担当Claudeへ引き継ぐ。
+1. VPS正本の本モバイルアプリbaselineは存在しない。VPS管理が手動審査で扱うため、`production_baseline_commit: null` のまま明記する。配信済みsourceと実EAS artifactの調査は端末配信担当Claudeへ引き継ぐ。
 2. EASへ実際に渡るfile一覧、`.env`・一時file非混入、配信branch/channel、対象platform、native fingerprint、直前安定版は未確認。端末配信前にClaudeが確認する。
 3. 分類PUTの並行更新対策とCOOPバックアップの復旧・隔離復元はVPS管理側の別作業で、完了報告は未受領。完了まで現候補の端末配信を保留する。Firestore側rollback方針も未確認。
 4. こちらから参照できるVPS管理の `production_deployments.yaml` は旧COOP API commitのまま。稼働commit `f425949` の根拠・正本更新状況はVPS管理側で確認する。
 
 ## 希望時期
 
-source固定と初回提出前セルフチェックは完了。VPS管理からの指摘箇所と今回の文書差分を増分確認して `ready_for_review` として再提出する。分類PUTの並行更新対策とCOOPバックアップの復旧・隔離復元が完了するまで端末配信は保留。完了後もClaudeが配信対象を提示し、app ownerの個別承認で決める。
+source固定と初回提出前セルフチェックは完了し、VPS管理から技術受理の報告を受領。分類PUTの並行更新対策とCOOPバックアップの復旧・隔離復元がともに完了するまで端末配信は保留。完了後もClaudeが配信対象を提示し、app ownerの個別承認で決める。
 
 ## VPS管理チャットへの引き継ぎ
 
 - 引き継ぎ要否: 必要。
-- ユーザーへの案内: 本チャットの回答で、VPS管理の既存blocked通知に対する再提出を案内する。
+- ユーザーへの案内: VPS管理の技術受理と、別作業が完了するまでの端末配信保留を伝える。
 - VPS管理チャットへ渡すpath: `ops/server-change-notices/20260930-MEALPLANNER-001-summary.md`（repository相対path。最終案内ではローカル絶対pathを提示する）。
 
 ## Approval
 
 - app owner: 改修実施、通知提出に必要なsourceとnoticeのcommit・pushを2026-09-30に承認。端末配信の個別承認は未取得。
-- VPS management review: 2026-09-30に通知を受け付け、`blocked`。COOP API稼働commit訂正と `ready_for_review` への更新を指示。
+- VPS management review: 2026-09-30に技術受理との報告をユーザーから受領。モバイルbaseline未登録は手動審査で扱う。分類PUT対策とCOOPバックアップ復旧・隔離復元は別作業で、完了報告は未受領。
 - production approval: なし。VPS作業の予定なし。端末配信は別承認。
 - related task_id: 20260930-002〜006、008。007は設計担当が直接実施。
