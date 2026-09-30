@@ -7,7 +7,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { StatusBar } from "expo-status-bar";
 
 import { getDateKey, getDayLabel, formatDate, genFutureDates, genArchiveDates, getEmoji, genId, getGreeting } from "./src/utils/helpers";
-import { searchRecipeFromWeb, fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopMealPlan, fetchRecipeTitle, extractRecipe } from "./src/api";
+import { searchRecipeFromWeb, fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopMealPlan, fetchRecipeTitle, extractRecipe, classifyCoopProduct } from "./src/api";
 import { COOP_CATEGORIES } from "./src/data/sampleData";
 import { Recipe, RecipeFormData, MenuItem, Menus, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem, ModalState, WebSearchItem, RecipeCategory, NurseryMenus } from "./src/types";
 import { useAuth } from "./src/hooks/useAuth";
@@ -43,7 +43,7 @@ function ExternalNoticeLayout({ children, feed, visible, onOpen, onClose }: {
 export default function App() {
   const { user, loading: authLoading, authLoading: signingIn, error: authError, setError: clearAuthError, signIn, signUp, resetPassword, logout } = useAuth();
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
-  const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, loadingData, loadError: dataError } = useFirestore(household?.id ?? null);
+  const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, loadingData, loadError: dataError, saveError, dismissSaveFailure } = useFirestore(household?.id ?? null);
   const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
   const notices = useNoticesFeed();
   const [noticesOpen, setNoticesOpen] = useState(false);
@@ -218,6 +218,15 @@ export default function App() {
         </View>
         <NoticeBell count={notices.unreadCount} onPress={openNotices} />
       </View>
+
+      {saveError && (
+        <View accessibilityRole="alert" style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: "#fdeeed" }}>
+          <Text style={{ flex: 1, color: "#c0564e", fontSize: 12 }}>{saveError}</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="保存失敗の通知を閉じる" onPress={dismissSaveFailure}>
+            <Text style={{ color: "#8a4b43", fontSize: 18, paddingHorizontal: 4 }}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <MaintenanceBanner feed={notices} onOpen={openNotices} />
 
@@ -953,42 +962,131 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
   const [suggestResult, setSuggestResult] = useState<SuggestResult | null>(null);
   const [planResult, setPlanResult] = useState<PlanResult | null>(null);
   const [savedFlags, setSavedFlags] = useState<Record<string, boolean>>({});
+  const [planStartDateKey, setPlanStartDateKey] = useState<string | null>(null);
+  const [planConflictDates, setPlanConflictDates] = useState<string[] | null>(null);
+  const [planAdding, setPlanAdding] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<{ item: CoopData[CoopCategoryKey][number]; category: string } | null>(null);
+  const [editingCategory, setEditingCategory] = useState("");
+  const [classifying, setClassifying] = useState(false);
+  const planAddInProgress = useRef(false);
+  const menusRef = useRef(menus);
+  menusRef.current = menus;
+  const savedFlagsRef = useRef(savedFlags);
+  savedFlagsRef.current = savedFlags;
+  const requestInProgress = useRef(false);
+  const loadedData = useRef<CoopData | null>(null);
 
-  const loadData = async (): Promise<void> => {
-    setFetching(true); setError(null);
-    try {
-      // 1. VPSにメール取得を指示
-      const fetchResult = await triggerCoopFetch(14);
-      if (fetchResult.status === "no_data" || fetchResult.status === "busy") {
-        setError(fetchResult.status === "busy"
-          ? "別の取込処理を実行中です。しばらくしてから再度お試しください。"
-          : "新しい注文データが見つかりませんでした");
-        // no_data・busyでも既存データは表示し続ける
-        if (!coopData) {
-          // 初回取得時でno_data・busyの場合は既存データを試みる
-          try {
-            const data = await fetchCoopIngredients();
-            setCoopData(data);
-          } catch { /* 既存データもなければ空のまま */ }
-        }
-        return;
-      }
-      // 2. 取得成功後に最新データを取得
-      const data = await fetchCoopIngredients();
-      setCoopData(data);
+  const updateLoadedData = (data: CoopData): void => {
+    const previous = loadedData.current;
+    if (!previous || previous.order_date !== data.order_date || previous.parsed_at !== data.parsed_at) {
       setSelected(new Set());
+    } else {
+      const newItems = new Map<string, string>();
+      const identityByOldKey = new Map<string, string>();
+      for (const cat of COOP_CATEGORIES) {
+        for (const item of previous[cat.key] || []) {
+          const identity = `${item.order_no}\u0000${item.original_name}`;
+          const key = `${cat.key}:${item.order_no}`;
+          identityByOldKey.set(key, identity);
+        }
+        for (const item of data[cat.key] || []) newItems.set(`${item.order_no}\u0000${item.original_name}`, `${cat.key}:${item.order_no}`);
+      }
+      setSelected(current => {
+        const next = new Set<string>();
+        current.forEach(key => {
+          const identity = identityByOldKey.get(key);
+          const newKey = identity ? newItems.get(identity) : undefined;
+          if (newKey) next.add(newKey);
+        });
+        return next;
+      });
+    }
+    loadedData.current = data;
+    setCoopData(data);
+  };
+
+  const loadSavedIngredients = async (): Promise<void> => {
+    if (requestInProgress.current) return;
+    requestInProgress.current = true;
+    setFetching(true);
+    setError(null);
+    try {
+      const data = await fetchCoopIngredients();
+      updateLoadedData(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[COOP] failed:", msg);
-      setError("取得に失敗しました: " + msg);
+      setError("一覧の読み込みに失敗しました: " + msg);
     } finally {
+      requestInProgress.current = false;
       setFetching(false);
     }
   };
-  useEffect(() => { loadData(); }, []);
+
+  const refreshFromMail = async (): Promise<void> => {
+    if (requestInProgress.current) return;
+    requestInProgress.current = true;
+    setFetching(true);
+    setError(null);
+    let fetchMessage: string | null = null;
+    try {
+      const fetchResult = await triggerCoopFetch(14);
+      if (fetchResult.status === "no_data") fetchMessage = "新しい注文データが見つかりませんでした。保存済み一覧を表示しています。";
+      else if (fetchResult.status === "busy") fetchMessage = "別の取込処理を実行中です。保存済み一覧を表示しています。";
+      else fetchMessage = "メール取得を完了しました。";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      fetchMessage = "メール取得に失敗しました: " + msg;
+    }
+
+    try {
+      const data = await fetchCoopIngredients();
+      updateLoadedData(data);
+      setError(fetchMessage);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`${fetchMessage ? `${fetchMessage} ` : ""}保存済み一覧の読み込みに失敗しました: ${msg}`);
+    } finally {
+      requestInProgress.current = false;
+      setFetching(false);
+    }
+  };
+
+  useEffect(() => { void loadSavedIngredients(); }, []);
 
   const toggleSelect = (k: string): void => {
     setSelected(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  };
+  const openProductEditor = (item: CoopData[CoopCategoryKey][number], category: string): void => {
+    setEditingProduct({ item, category });
+    setEditingCategory(category);
+    setError(null);
+  };
+  const saveProductCategory = async (): Promise<void> => {
+    if (!editingProduct || classifying || requestInProgress.current) return;
+    const originalName = editingProduct.item.original_name?.trim();
+    if (!originalName || editingCategory === editingProduct.category) return;
+    requestInProgress.current = true;
+    setClassifying(true);
+    setFetching(true);
+    setError(null);
+    try {
+      await classifyCoopProduct(editingProduct.item.original_name, editingCategory);
+      try {
+        const data = await fetchCoopIngredients();
+        updateLoadedData(data);
+        setEditingProduct(null);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "通信エラー";
+        setError(`分類は送信されましたが、一覧を再取得できず反映結果を確認できません。一覧を再読み込みしてください。 (${message})`);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "通信エラー";
+      setError(`分類結果を確認できません。現在の一覧を保持しています。再読み込みで反映を確認してください。 (${message})`);
+    } finally {
+      requestInProgress.current = false;
+      setClassifying(false);
+      setFetching(false);
+    }
   };
   const toggleCategory = (k: string): void => {
     setExpandedCat(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -1021,7 +1119,10 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
   };
   const handlePlan = async (): Promise<void> => {
     const names = getSelectedNames(); if (names.length === 0) return;
-    setView("loading"); setPlanResult(null); setSavedFlags({});
+    const startDate = new Date(); startDate.setHours(0, 0, 0, 0);
+    setPlanStartDateKey(getDateKey(startDate));
+    setPlanConflictDates(null); setView("loading"); setPlanResult(null); setSavedFlags({});
+    savedFlagsRef.current = {};
     try { const r = await createCoopMealPlan(names); setPlanResult(r); setView("planResult"); }
     catch { setError("献立作成に失敗しました"); setView("list"); }
   };
@@ -1032,9 +1133,25 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
     setRecipes(p => [...p, recipe]);
     setSavedFlags(p => ({ ...p, [key]: true }));
   };
-  const handleAddToMealFromPlan = (dayItem: PlanDayItem, idx: number): void => {
-    const d = new Date(); d.setDate(d.getDate() + idx);
-    const dateKey = getDateKey(d);
+  const getPlanDateKey = (idx: number): string => {
+    const d = new Date(`${planStartDateKey || getDateKey(new Date())}T00:00:00`);
+    d.setDate(d.getDate() + idx);
+    return getDateKey(d);
+  };
+  const getPendingPlanDays = (): { dayItem: PlanDayItem; idx: number; dateKey: string }[] =>
+    (planResult?.plan || []).flatMap((dayItem, idx) => {
+      if (savedFlagsRef.current[`plan-${dayItem.day}`]) return [];
+      return [{ dayItem, idx, dateKey: getPlanDateKey(idx) }];
+    });
+  const getPlanConflictDates = (): string[] => getPendingPlanDays()
+    .filter(item => (menusRef.current[item.dateKey]?.length || 0) > 0)
+    .map(item => item.dateKey);
+  const formatPlanDate = (dateKey: string): string => {
+    const d = new Date(`${dateKey}T00:00:00`);
+    const pd = formatDate(d);
+    return `${pd.month}/${pd.day}(${pd.weekday})`;
+  };
+  const handleAddToMealFromPlan = (dayItem: PlanDayItem, dateKey: string): void => {
     const recipeId = genId();
     const r = dayItem.recipe;
     const url = dayItem.web_recipe?.url;
@@ -1042,7 +1159,41 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
     const recipe: Recipe = url ? { ...base, url } : base;
     setRecipes(p => [...p, recipe]);
     setMenus(p => ({ ...p, [dateKey]: [...(p[dateKey] || []), { id: genId(), name: r.name, recipeId }] }));
-    setSavedFlags(p => ({ ...p, [`plan-${dayItem.day}`]: true }));
+    const key = `plan-${dayItem.day}`;
+    const nextFlags = { ...savedFlagsRef.current, [key]: true };
+    savedFlagsRef.current = nextFlags;
+    setSavedFlags(nextFlags);
+  };
+  const handleStartAddAllPlans = (): void => {
+    if (planAddInProgress.current || !planResult) return;
+    const pending = getPendingPlanDays();
+    if (pending.length === 0) return;
+    const conflicts = getPlanConflictDates();
+    if (conflicts.length > 0) {
+      setPlanConflictDates(conflicts);
+      return;
+    }
+    planAddInProgress.current = true;
+    setPlanAdding(true);
+    pending.forEach(({ dayItem, dateKey }) => handleAddToMealFromPlan(dayItem, dateKey));
+    planAddInProgress.current = false;
+    setPlanAdding(false);
+    setPlanConflictDates(null);
+  };
+  const handleConfirmAddAllPlans = (): void => {
+    if (planAddInProgress.current || !planResult) return;
+    const conflicts = getPlanConflictDates();
+    const newlyConflicted = conflicts.filter(dateKey => !planConflictDates?.includes(dateKey));
+    if (newlyConflicted.length > 0) {
+      setPlanConflictDates(conflicts);
+      return;
+    }
+    planAddInProgress.current = true;
+    setPlanAdding(true);
+    getPendingPlanDays().forEach(({ dayItem, dateKey }) => handleAddToMealFromPlan(dayItem, dateKey));
+    planAddInProgress.current = false;
+    setPlanAdding(false);
+    setPlanConflictDates(null);
   };
 
   // API処理中（レシピ提案・献立作成のみ。データ取得中はここに入らない）
@@ -1108,19 +1259,35 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <TouchableOpacity style={s.formBackBtn} onPress={() => setView("list")}>
+          <TouchableOpacity style={s.formBackBtn} onPress={() => { setPlanConflictDates(null); setView("list"); }}>
             <Text style={{ color: "#a08979", fontSize: 12 }}>← 戻る</Text>
           </TouchableOpacity>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#4a3f36" }}>自動献立プラン</Text>
         </View>
-        <TouchableOpacity style={[s.planAllBtn, { opacity: allSaved ? 0.6 : 1 }]}
-          onPress={() => !allSaved && planResult.plan.forEach((d, i) => !savedFlags[`plan-${d.day}`] && handleAddToMealFromPlan(d, i))} disabled={allSaved}>
+        <TouchableOpacity style={[s.planAllBtn, { opacity: allSaved || planAdding ? 0.6 : 1 }]}
+          onPress={handleStartAddAllPlans} disabled={allSaved || planAdding}>
           <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{allSaved ? "✓ すべて登録済み" : "📅 すべて献立に登録する"}</Text>
         </TouchableOpacity>
+        {planConflictDates && (
+          <View style={{ backgroundColor: "#fff5e9", borderWidth: 1, borderColor: "#e7c9a8", borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <Text style={{ color: "#5a4a3c", fontSize: 13, fontWeight: "700", marginBottom: 6 }}>既存の献立がある日があります</Text>
+            <Text style={{ color: "#6a5d50", fontSize: 12, marginBottom: 8 }}>対象日: {planConflictDates.map(formatPlanDate).join("、")}</Text>
+            <Text style={{ color: "#6a5d50", fontSize: 12, marginBottom: 12 }}>既存の献立は残し、提案料理を追加します。</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity style={[s.formBackBtn, { flex: 1, alignItems: "center" }]} onPress={() => setPlanConflictDates(null)} disabled={planAdding}>
+                <Text style={{ color: "#a08979", fontSize: 12 }}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.planAllBtn, { flex: 1, marginBottom: 0, opacity: planAdding ? 0.6 : 1 }]} onPress={handleConfirmAddAllPlans} disabled={planAdding}>
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>{planAdding ? "追加中..." : "追加する"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
         {planResult.plan.map((dayItem, idx) => {
           const saved = savedFlags[`plan-${dayItem.day}`];
           const r = dayItem.recipe;
-          const pd = formatDate((() => { const x = new Date(); x.setDate(x.getDate() + idx); return x; })());
+          const dateKey = getPlanDateKey(idx);
+          const pd = formatDate(new Date(`${dateKey}T00:00:00`));
           return (
             <View key={idx} style={[s.coopRecipeCard, { marginBottom: 10 }]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -1145,7 +1312,7 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
                 </View>
               ))}
               <TouchableOpacity style={[s.planDayBtn, { marginTop: 10, opacity: saved ? 0.6 : 1 }]}
-                onPress={() => !saved && handleAddToMealFromPlan(dayItem, idx)} disabled={saved}>
+                onPress={() => !saved && handleAddToMealFromPlan(dayItem, dateKey)} disabled={saved}>
                 <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>
                   {saved ? `✓ ${pd.month}/${pd.day}に登録済み` : `📅 ${pd.month}/${pd.day}(${pd.weekday})の献立に登録`}
                 </Text>
@@ -1168,12 +1335,23 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
         {error ? (
           <>
             <Text style={{ fontSize: 14, color: "#c0564e", textAlign: "center" }}>{error}</Text>
-            <TouchableOpacity style={{ padding: 12, backgroundColor: "#d4725c", borderRadius: 10 }} onPress={loadData}>
-              <Text style={{ color: "#fff", fontWeight: "700" }}>再試行</Text>
+            <TouchableOpacity style={{ padding: 12, backgroundColor: "#a08979", borderRadius: 10, opacity: fetching ? 0.6 : 1 }} onPress={loadSavedIngredients} disabled={fetching}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>一覧を再読み込み</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ padding: 12, backgroundColor: "#d4725c", borderRadius: 10, opacity: fetching ? 0.6 : 1 }} onPress={refreshFromMail} disabled={fetching}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>メールを手動取得</Text>
             </TouchableOpacity>
           </>
         ) : (
-          <Text style={{ fontSize: 14, color: "#b8a594", textAlign: "center" }}>注文データがありません</Text>
+          <>
+            <Text style={{ fontSize: 14, color: "#b8a594", textAlign: "center" }}>注文データがありません</Text>
+            <TouchableOpacity style={{ padding: 12, backgroundColor: "#a08979", borderRadius: 10, opacity: fetching ? 0.6 : 1 }} onPress={loadSavedIngredients} disabled={fetching}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>一覧を再読み込み</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ padding: 12, backgroundColor: "#d4725c", borderRadius: 10, opacity: fetching ? 0.6 : 1 }} onPress={refreshFromMail} disabled={fetching}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>メールを手動取得</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     );
@@ -1193,7 +1371,7 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
           </View>
           <TouchableOpacity
             style={[s.refreshBtn, fetching && { opacity: 0.6 }]}
-            onPress={loadData}
+            onPress={refreshFromMail}
             disabled={fetching}
           >
             {fetching
@@ -1203,8 +1381,11 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
           </TouchableOpacity>
         </View>
         {error && (
-          <View style={{ padding: 10, backgroundColor: "#fdeeed", borderRadius: 10, marginBottom: 8 }}>
+          <View style={{ padding: 10, backgroundColor: "#fdeeed", borderRadius: 10, marginBottom: 8, gap: 8 }}>
             <Text style={{ fontSize: 12, color: "#c0564e" }}>{error}</Text>
+            <TouchableOpacity onPress={loadSavedIngredients} disabled={fetching} style={{ alignSelf: "flex-start", paddingVertical: 5, paddingHorizontal: 9, backgroundColor: "#a08979", borderRadius: 7 }}>
+              <Text style={{ fontSize: 11, color: "#fff", fontWeight: "700" }}>一覧を再読み込み</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1232,16 +1413,42 @@ function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
                     const itemKey = `${cat.key}:${item.order_no}`;
                     const isSel = selected.has(itemKey);
                     return (
-                      <TouchableOpacity key={itemKey} style={[s.coopItem, isSel && s.coopItemSel]} onPress={() => toggleSelect(itemKey)}>
-                        <View style={[s.checkbox, isSel && s.checkboxChecked]}>
-                          {isSel && <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "500", color: isSel ? "#4a3f36" : "#6a5d50" }}>{item.name}</Text>
-                          <Text style={{ fontSize: 10, color: "#b8a594" }}>{item.original_name}</Text>
-                        </View>
-                        <Text style={{ fontSize: 11, color: "#c9a88c" }}>×{item.quantity}</Text>
-                      </TouchableOpacity>
+                      <React.Fragment key={itemKey}>
+                        <TouchableOpacity style={[s.coopItem, isSel && s.coopItemSel]} onPress={() => toggleSelect(itemKey)} onLongPress={() => openProductEditor(item, cat.label)} delayLongPress={450} disabled={fetching || classifying}>
+                          <View style={[s.checkbox, isSel && s.checkboxChecked]}>
+                            {isSel && <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "500", color: isSel ? "#4a3f36" : "#6a5d50" }}>{item.name}</Text>
+                            <Text style={{ fontSize: 10, color: "#b8a594" }}>{item.original_name}</Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: "#c9a88c" }}>×{item.quantity}</Text>
+                          <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${item.name}の分類を編集`} onPress={() => openProductEditor(item, cat.label)} disabled={fetching || classifying} style={{ marginLeft: 8, paddingVertical: 5, paddingHorizontal: 8, backgroundColor: "#f4ece4", borderRadius: 7 }}>
+                            <Text style={{ fontSize: 10, color: "#8a6c55" }}>分類</Text>
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                        {editingProduct?.item.order_no === item.order_no && editingProduct.item.original_name === item.original_name && (
+                          <View style={{ padding: 12, backgroundColor: "#fffaf4", borderColor: "#e8d8c8", borderWidth: 1, borderRadius: 10, marginHorizontal: 4, marginBottom: 8 }}>
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#4a3f36" }}>商品カテゴリを変更</Text>
+                            <Text style={{ fontSize: 11, color: "#6a5d50", marginTop: 5 }}>{item.original_name || "商品名がありません"}</Text>
+                            <Text style={{ fontSize: 10, color: "#8a7e72", marginTop: 4 }}>この分類は同じ商品名に次回以降も適用されます。</Text>
+                            {!item.original_name?.trim() && <Text style={{ fontSize: 11, color: "#c0564e", marginTop: 5 }}>商品名が空欄のため分類を保存できません。</Text>}
+                            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                              {COOP_CATEGORIES.map(option => (
+                                <TouchableOpacity key={option.key} onPress={() => setEditingCategory(option.label)} disabled={classifying} style={{ paddingVertical: 6, paddingHorizontal: 9, borderRadius: 7, backgroundColor: editingCategory === option.label ? option.color : "#f2ece5" }}>
+                                  <Text style={{ fontSize: 10, color: editingCategory === option.label ? "#fff" : "#6a5d50" }}>{option.label}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+                              <TouchableOpacity onPress={() => setEditingProduct(null)} disabled={classifying} style={{ paddingVertical: 7, paddingHorizontal: 12 }}><Text style={{ fontSize: 11, color: "#8a7e72" }}>キャンセル</Text></TouchableOpacity>
+                              <TouchableOpacity onPress={() => void saveProductCategory()} disabled={classifying || fetching || !item.original_name?.trim() || editingCategory === editingProduct.category} style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 7, backgroundColor: classifying || fetching || !item.original_name?.trim() || editingCategory === editingProduct.category ? "#c9bdb2" : "#d4725c" }}>
+                                <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>{classifying ? "保存中..." : "保存"}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </View>
@@ -1596,6 +1803,7 @@ function RecipeFormFull({ recipe, onSave, onCancel, onDelete, categories, setCat
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractMsg, setExtractMsg] = useState<string | null>(null);
+  const hasNonBlankUrl = typeof recipe?.url === "string" && recipe.url.trim().length > 0;
 
   const handleUrlBlur = async (): Promise<void> => {
     const trimmedUrl = url.trim();
@@ -1717,11 +1925,11 @@ function RecipeFormFull({ recipe, onSave, onCancel, onDelete, categories, setCat
       {onDelete && (
         <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: "#f0e5d8", paddingTop: 12 }}>
           {!confirmDel ? (
-            <TouchableOpacity onPress={() => setConfirmDel(true)}><Text style={{ fontSize: 12, color: "#c0564e" }}>このレシピを削除</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setConfirmDel(true)}><Text style={{ fontSize: 12, color: "#c0564e" }}>{hasNonBlankUrl ? "このレシピを一覧から外す" : "このレシピを削除"}</Text></TouchableOpacity>
           ) : (
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-              <Text style={{ fontSize: 12, color: "#c0564e" }}>本当に削除しますか？</Text>
-              <TouchableOpacity style={s.dangerBtn} onPress={() => { if (recipe?.id) { onDelete(recipe.id); } }}><Text style={s.dangerBtnText}>削除する</Text></TouchableOpacity>
+              <Text style={{ fontSize: 12, color: "#c0564e" }}>{hasNonBlankUrl ? "一覧から外します。レシピデータは保持されます。" : "本当に削除しますか？"}</Text>
+              <TouchableOpacity style={s.dangerBtn} onPress={() => { if (recipe?.id) { onDelete(recipe.id); } }}><Text style={s.dangerBtnText}>{hasNonBlankUrl ? "一覧から外す" : "削除する"}</Text></TouchableOpacity>
               <TouchableOpacity style={s.closeBtn} onPress={() => setConfirmDel(false)}><Text style={s.closeBtnText}>やめる</Text></TouchableOpacity>
             </View>
           )}

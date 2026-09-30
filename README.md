@@ -1,58 +1,39 @@
 # 献立ノート（Meal Planner）
 
-日々の夕食献立を管理するスマホアプリ（React Native / Expo Go）
+夕食の献立、レシピ、COOPの注文食材を扱うReact Native / Expo（SDK 57）のアプリです。この文書はリポジトリ内の実装を説明します。アプリの配信状況やproductionへの反映状況は示しません。
 
-## セットアップ手順
+## 開発環境の準備
 
-### 1. zipを展開
+1. リポジトリのアプリディレクトリで `npm install` を実行します。
+2. `.env.example` を参考に、利用する機能に必要な環境変数を手元の `.env` に設定します。Firebaseと各APIの設定値は環境ごとに用意し、秘密値をGitや文書に書かないでください。
+3. `npm start`（または `npx expo start`）でExpoを起動します。
 
-```bash
-unzip meal-planner-app.zip
-cd meal-planner-app
-```
-
-### 2. 依存パッケージをインストール
-
-```bash
-npm install
-```
-
-### 3. Expo Go で起動
-
-```bash
-npx expo start
-```
-
-スマホの Expo Go アプリでQRコードを読み取ると起動します。
+TypeScriptの型を確認するときは `npm run typecheck` を実行します。
 
 ## 主な機能
 
-- **📅 献立タブ**: 日別の献立管理（今日〜14日後 + 過去7日アーカイブ）
-- **📖 レシピタブ**: レシピの登録・管理・WEB検索
-- **🛒 COOPタブ**: COOP注文食材からレシピ提案・献立自動作成
+- **献立**: 当日から14日後までの献立と、過去7日分のアーカイブを表示・編集します。
+- **レシピ**: 登録、編集、WEB検索を行います。
+- **COOP**: 保存済み注文食材の表示、手動メール取得、カテゴリ手動修正、レシピ提案、献立プラン作成を行います。
+- **給食**: 世帯の給食データを表示します。
+- **世帯・お知らせ**: ログインと世帯の管理、お知らせの表示を行います。
 
-## 仮実装について
+献立、レシピ、カテゴリ、給食の同期にはFirestoreを使います。AsyncStorageは取得済みデータを表示するためのローカルキャッシュで、保存先の正本はFirestoreです。ログイン状態はFirebase AuthのReact Native用永続化を使います。COOP APIのURL・トークンは環境変数を初期値とし、端末のSecureStoreに保存されます。
 
-現在、以下の機能はダミーデータ・仮APIで動作しています。
+COOPとレシピ検索は `src/api/index.ts` の実API関数を呼びます。COOPタブの起動時は保存済み食材をGETし、メール取得POSTは画面から明示操作した場合に使います。APIの入出力は `docs/API_SPEC.md`、残存するサンプルデータの扱いは `docs/MOCK_IMPLEMENTATIONS.md` を参照してください。
 
-- レシピWEB検索（Claude API使用）
-- COOP注文食材取得（ダミーデータ）
-- COOPレシピ提案（ダミーデータ）
-- COOP献立自動作成（ダミーデータ）
-- データ永続化（未実装・リロードでリセット）
+## 主な構成
 
-詳細は `docs/MOCK_IMPLEMENTATIONS.md` を参照してください。
-
-## ディレクトリ構成
-
-```
-├── App.js              ← メインアプリ
-├── src/
-│   ├── api/index.js    ← API関数（差し替えポイント）
-│   ├── data/sampleData.js ← サンプルデータ
-│   └── utils/helpers.js   ← ユーティリティ
-├── docs/
-│   ├── PROJECT_RULES.md   ← プロジェクト指示文
-│   ├── API_SPEC.md        ← COOP API仕様書
-│   └── MOCK_IMPLEMENTATIONS.md ← 仮実装一覧
+```text
+App.tsx                     主要タブと画面の組み立て
+index.ts                    Expoエントリポイント
+src/api/index.ts            レシピ検索・COOP API
+src/api/notices.ts          お知らせ取得
+src/config/                 Firebase・COOP設定
+src/hooks/                  認証、世帯、Firestore、給食、お知らせ
+src/screens/                ログイン・世帯関連画面
+src/components/             共通UI
+src/data/sampleData.ts      残存サンプルと使用中のカテゴリ定義
+src/utils/                  日付処理とローカルキャッシュ
+docs/                       API仕様と実装状況
 ```

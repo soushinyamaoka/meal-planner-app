@@ -66,40 +66,47 @@ setDoc(ref, stripUndefined(data));
 
 ## 技術スタック
 
-- React Native (Expo Go, SDK 54)
+- React Native / Expo (SDK 57)
 - TypeScript
-- expo-secure-store（APIトークン・URL管理）
-- 将来: AsyncStorage or SQLite（データ永続化）
+- Firebase Auth / Firestore（ログイン・世帯と献立・レシピ等の同期）
+- AsyncStorage（Firestoreデータのローカルキャッシュと認証状態の保持。Firestoreが正本）
+- expo-secure-store（COOP APIトークン・URL等の設定保持）
 
 ## プロジェクト構成
 
 ```
 meal-planner-app/
-├── App.tsx                      ← メインアプリ（全コンポーネント含む）
+├── App.tsx                      ← メインアプリと主要タブ
 ├── index.ts                     ← エントリポイント (registerRootComponent)
 ├── src/
 │   ├── types/index.ts           ← 共通型定義
-│   ├── api/index.ts             ← API関数（差し替えポイント）
-│   ├── config/coopConfig.ts     ← APIトークン・URL管理 (SecureStore)
-│   ├── data/sampleData.ts       ← サンプル・ダミーデータ
-│   └── utils/helpers.ts         ← ユーティリティ関数
+│   ├── api/index.ts             ← レシピ検索・COOP API関数
+│   ├── api/notices.ts           ← お知らせ取得と検証
+│   ├── config/coopConfig.ts     ← API設定の初期値とSecureStore
+│   ├── config/firebaseConfig.ts ← Firebase初期化
+│   ├── hooks/                    ← 認証・世帯・Firestore等の同期
+│   ├── screens/                  ← ログイン・世帯関連画面
+│   ├── components/               ← 共通UI
+│   ├── data/sampleData.ts       ← 未使用のデモデータと使用中のカテゴリ定義
+│   └── utils/                   ← 日付処理・ローカルキャッシュ等
 ├── docs/
 │   ├── API_SPEC.md              ← COOP連携API仕様書
-│   └── MOCK_IMPLEMENTATIONS.md ← 仮実装一覧
+│   └── MOCK_IMPLEMENTATIONS.md ← 仮実装の現状と残存サンプル
 └── package.json
 ```
 
 ## API構成
 
-実際のURL・トークンは `.env` で管理（`.env.example` 参照）。
+環境変数を初期値として読み込む（設定する変数名は `.env.example` を参照）。COOPのURL・トークンは `src/config/coopConfig.ts` を通じてSecureStoreに保存され、以後は保存済み設定を使用する。秘密値を文書やログに転記しない。
 
 | 機能 | エンドポイント | 認証 |
 |------|--------------|------|
 | WEB検索 | $EXPO_PUBLIC_WEB_API_URL/api/recipes/search (POST) | 不要 |
 | COOP食材取得 | $EXPO_PUBLIC_COOP_API_URL/api/coop/ingredients (GET) | Bearer トークン |
+| COOPメール手動取得 | $EXPO_PUBLIC_COOP_API_URL/api/coop/fetch (POST) | Bearer トークン |
+| COOPカテゴリ手動修正 | $EXPO_PUBLIC_COOP_API_URL/api/coop/classify (PUT) | Bearer トークン |
 | COOPレシピ提案 | $EXPO_PUBLIC_COOP_API_URL/api/coop/suggest-recipes (POST) | Bearer トークン |
 | COOP献立自動作成 | $EXPO_PUBLIC_COOP_API_URL/api/coop/meal-plan (POST) | Bearer トークン |
 
-- APIトークン・URLはすべて `src/config/coopConfig.ts` 経由で SecureStore から取得する
-- API関数はすべて `src/api/index.ts` に集約されている
-- 詳細は `docs/API_SPEC.md` および `docs/MOCK_IMPLEMENTATIONS.md` を参照
+- COOPのAPI設定は `src/config/coopConfig.ts` を経由する。お知らせ取得は `src/api/notices.ts` に分かれる。
+- ソース上の実装状況は `docs/MOCK_IMPLEMENTATIONS.md`、COOP APIの入出力は `docs/API_SPEC.md` を参照する。

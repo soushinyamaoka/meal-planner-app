@@ -17,6 +17,10 @@ import { ARCHIVE_DAYS, DAYS_AFTER, getDateKey } from "../utils/helpers";
 import { readLocalCache, writeLocalCacheDebounced } from "../utils/localCache";
 
 /** Firestoreに書き込む前に undefined のフィールドを除去する */
+function hasNonBlankUrl(recipe: Recipe): boolean {
+  return typeof recipe.url === "string" && recipe.url.trim().length > 0;
+}
+
 function stripUndefined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined)
@@ -35,6 +39,9 @@ export function useFirestore(householdId: string | null) {
   const [categories, setCategoriesLocal] = useState<RecipeCategory[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveFailure, setSaveFailure] = useState<{ householdId: string } | null>(null);
+  const currentHouseholdIdRef = useRef(householdId);
+  currentHouseholdIdRef.current = householdId;
   const [menusServerConfirmedFor, setMenusServerConfirmedFor] = useState<string | null>(null);
   const [recipesServerConfirmedFor, setRecipesServerConfirmedFor] = useState<string | null>(null);
   const menusServerConfirmedRef = useRef<string | null>(null);
@@ -42,6 +49,7 @@ export function useFirestore(householdId: string | null) {
 
   // ─── Firestoreリスナー ───────────────────────────────────────────────────────
   useEffect(() => {
+    setSaveFailure(null);
     menusServerConfirmedRef.current = null;
     recipesServerConfirmedRef.current = null;
     setMenusServerConfirmedFor(null);
@@ -190,7 +198,9 @@ export function useFirestore(householdId: string | null) {
     const archiveCutoff = new Date(today);
     archiveCutoff.setDate(archiveCutoff.getDate() - ARCHIVE_DAYS);
 
-    const staleRecipes = recipes.filter((r) => r.showInList === false);
+    const staleRecipes = recipes.filter(
+      (r) => r.showInList === false && !hasNonBlankUrl(r)
+    );
     staleRecipes.forEach((recipe) => {
       const refDates = Object.entries(menus)
         .filter(([, items]) => items.some((item) => item.recipeId === recipe.id))
@@ -217,13 +227,24 @@ export function useFirestore(householdId: string | null) {
     await batch.commit();
   };
 
+  // Firestore may keep writes pending while offline; notify only after rejection.
+  const trackUserWrite = (write: Promise<unknown>, hid: string): void => {
+    void write.catch(() => {
+      if (currentHouseholdIdRef.current === hid) {
+        setSaveFailure({ householdId: hid });
+      }
+    });
+  };
+
+  const dismissSaveFailure = useCallback(() => setSaveFailure(null), []);
+
   // ─── Firestore書き込みヘルパー ──────────────────────────────────────────────
   const writeMenuDate = (hid: string, dateKey: string, items: MenuItem[]): void => {
     const ref = doc(db, `households/${hid}/menus`, dateKey);
     if (items.length === 0) {
-      deleteDoc(ref).catch(console.error);
+      trackUserWrite(deleteDoc(ref), hid);
     } else {
-      setDoc(ref, { items }).catch(console.error);
+      trackUserWrite(setDoc(ref, { items }), hid);
     }
   };
 
@@ -258,7 +279,7 @@ export function useFirestore(householdId: string | null) {
           } else {
             batch.set(menuRef, stripUndefined({ items }));
           }
-          batch.commit().catch(console.error);
+          trackUserWrite(batch.commit(), householdId);
         }
 
         return next;
@@ -290,20 +311,25 @@ export function useFirestore(householdId: string | null) {
   const setRecipes = useCallback(
     (updater: React.SetStateAction<Recipe[]>): void => {
       setRecipesLocal((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
+        const requestedNext = typeof updater === "function" ? updater(prev) : updater;
+        const requestedIds = new Set(requestedNext.map((recipe) => recipe.id));
+        const retainedUrlRecipes = prev
+          .filter((recipe) => !requestedIds.has(recipe.id) && hasNonBlankUrl(recipe))
+          .map((recipe) => ({ ...recipe, showInList: false }));
+        const next = [...requestedNext, ...retainedUrlRecipes];
         if (householdId) {
           // 追加・更新
           next.forEach((recipe) => {
             const old = prev.find((r) => r.id === recipe.id);
             if (!old || JSON.stringify(old) !== JSON.stringify(recipe)) {
               const { id, ...data } = recipe;
-              setDoc(doc(db, `households/${householdId}/recipes`, id), stripUndefined(data)).catch(console.error);
+              trackUserWrite(setDoc(doc(db, `households/${householdId}/recipes`, id), stripUndefined(data)), householdId);
             }
           });
           // 削除
           prev.forEach((recipe) => {
             if (!next.find((r) => r.id === recipe.id)) {
-              deleteDoc(doc(db, `households/${householdId}/recipes`, recipe.id)).catch(console.error);
+              trackUserWrite(deleteDoc(doc(db, `households/${householdId}/recipes`, recipe.id)), householdId);
             }
           });
         }
@@ -335,7 +361,7 @@ export function useFirestore(householdId: string | null) {
               batch.set(doc(db, `households/${householdId}/categories`, cat.id), { name: cat.name });
             }
           });
-          batch.commit().catch(console.error);
+          trackUserWrite(batch.commit(), householdId);
 
           // 削除されたカテゴリを参照しているレシピの categoryIds からも除去（孤立参照を防ぐ）
           if (deletedIds.length > 0) {
@@ -347,7 +373,7 @@ export function useFirestore(householdId: string | null) {
                 const updatedRecipe = { ...r, categoryIds: filtered };
                 // Firestoreにも反映
                 const { id, ...data } = updatedRecipe;
-                setDoc(doc(db, `households/${householdId}/recipes`, id), stripUndefined(data)).catch(console.error);
+                trackUserWrite(setDoc(doc(db, `households/${householdId}/recipes`, id), stripUndefined(data)), householdId);
                 return updatedRecipe;
               });
               return updated;
@@ -366,6 +392,10 @@ export function useFirestore(householdId: string | null) {
     categories,
     loadingData,
     loadError,
+    saveError: saveFailure?.householdId === householdId
+      ? "保存できませんでした。変更が反映されていない可能性があります。"
+      : null,
+    dismissSaveFailure,
     setMenus,
     setRecipes,
     setCategories,

@@ -1,88 +1,31 @@
-# 仮実装一覧（MOCK_IMPLEMENTATIONS）
+# 仮実装とサンプルデータの現状
 
-このドキュメントでは、現在ダミーデータ・仮APIで動作している箇所と、本実装時の差し替え手順を記載します。
+このファイル名は既存の参照との互換性のために残しています。以下はリポジトリ内のソースで確認できる実装状況です。実機動作やproductionへの反映状況を示すものではありません。
 
----
+## APIを呼ぶ機能
 
-## 1. レシピWEB検索（`src/api/index.js` → `searchRecipeFromWeb`）
+| 機能 | 現在のアプリ実装 |
+|------|------------------|
+| レシピWEB検索 | `src/api/index.ts` の `searchRecipeFromWeb` がレシピ検索APIへPOSTします。固定のダミーレシピは返しません。 |
+| COOP注文食材 | `fetchCoopIngredients` が `GET /api/coop/ingredients` を呼びます。起動時は保存済み一覧のGETのみです。 |
+| COOPメール手動取得 | 画面からの明示操作で `triggerCoopFetch` が `POST /api/coop/fetch` を呼び、その後に一覧をGETします。 |
+| COOPレシピ提案 | `suggestCoopRecipes` が `POST /api/coop/suggest-recipes` を呼びます。 |
+| COOP献立プラン | `createCoopMealPlan` が `POST /api/coop/meal-plan` を呼びます。 |
+| COOP商品カテゴリ修正 | `classifyCoopProduct` が `PUT /api/coop/classify` を呼び、保存後に一覧をGETします。同じ元の商品名に対する上書き分類です。 |
 
-| 項目 | 内容 |
-|------|------|
-| 現在 | Claude API (web_search) を使用 |
-| 将来 | 独自APIに差し替え |
-| 差し替え方法 | 関数内のfetch先URLとリクエスト形式を変更 |
-| 引数 | `query: string` |
-| 返り値 | `{ name, ingredients[], steps[], url? }` |
+これらの関数は `src/config/coopConfig.ts` などの設定管理を通して接続先を取得します。COOPのURLとトークンは環境変数を初期値とし、SecureStoreに保存します。ソースに接続先や秘密値を書き込む差し替え作業は不要です。APIの入出力は `docs/API_SPEC.md` を参照してください。
 
----
+## データの保存とキャッシュ
 
-## 2. COOP注文食材取得（`src/api/index.js` → `fetchCoopIngredients`）
+- 献立・レシピ・レシピカテゴリは `src/hooks/useFirestore.tsx` でFirestoreと同期します。給食データは `src/hooks/useNurseryMenus.tsx` が読み込みます。
+- `src/utils/localCache.ts` は取得済みの献立・レシピ・カテゴリ・給食をAsyncStorageへキャッシュします。キャッシュは表示補助で、Firestoreの代わりの正本ではありません。
+- ログイン状態の永続化にはFirebase AuthのReact Native用AsyncStorage設定を使用します。
 
-| 項目 | 内容 |
-|------|------|
-| 現在 | `src/data/sampleData.js` のダミーデータを返却 |
-| 将来 | `GET /api/coop/ingredients` に差し替え |
-| 差し替え方法 | コメントアウトされた実API呼び出しを有効化し、ダミー部分を削除 |
-| 認証 | `Authorization: Bearer <TOKEN>` ヘッダーが必要 |
+## `src/data/sampleData.ts` の扱い
 
----
-
-## 3. COOPレシピ提案（`src/api/index.js` → `suggestCoopRecipes`）
-
-| 項目 | 内容 |
-|------|------|
-| 現在 | 固定のダミーレシピ2件を返却 |
-| 将来 | `POST /api/coop/suggest-recipes` に差し替え |
-| 差し替え方法 | コメントアウトされた実API呼び出しを有効化 |
-| リクエスト | `{ ingredients[], season?, genre?, servings?, mode? }` |
-
----
-
-## 4. COOP献立自動作成（`src/api/index.js` → `createCoopMealPlan`）
-
-| 項目 | 内容 |
-|------|------|
-| 現在 | 固定の3日分ダミープランを返却 |
-| 将来 | `POST /api/coop/meal-plan` に差し替え |
-| 差し替え方法 | コメントアウトされた実API呼び出しを有効化 |
-| リクエスト | `{ ingredients[], season?, servings?, simple_mode? }` |
-
----
-
-## 5. サンプルデータ（`src/data/sampleData.js`）
-
-| 項目 | 内容 |
-|------|------|
-| `sampleRecipes` | デモ用レシピ4件。本実装時はAsyncStorageやDBから読み込みに変更 |
-| `sampleMenus` | デモ用献立データ。同上 |
-| `COOP_DUMMY_DATA` | COOP注文のダミーデータ。実API接続後は不要 |
-| `COOP_CATEGORIES` | カテゴリ定義。本実装でもそのまま使用可能 |
-
----
-
-## 6. データ永続化（未実装）
-
-| 項目 | 内容 |
-|------|------|
-| 現在 | Reactのステート管理のみ（アプリ再起動でリセット） |
-| 将来 | AsyncStorage または SQLite で永続化 |
-| 対象 | `menus`, `recipes` のデータ |
-
----
-
-## 7. COOPカテゴリ修正（未実装）
-
-| 項目 | 内容 |
-|------|------|
-| API | `PUT /api/coop/classify` |
-| 内容 | 商品カテゴリを手動修正して学習データに保存 |
-| 状態 | 未着手。後日追加予定 |
-
----
-
-## 差し替え時の共通手順
-
-1. `src/api/index.js` の先頭にある `API_BASE_URL` と `API_TOKEN` を設定
-2. 各関数内のコメントアウトされた実API呼び出しを有効化
-3. ダミーデータ部分（`await new Promise(...)` ～ `return ...`）を削除
-4. 動作確認
+| 定義 | 現在の用途 |
+|------|------------|
+| `sampleRecipes`、`sampleMenus` | デモ用定義として残っています。現行の画面データには使用していません。 |
+| `COOP_DUMMY_DATA` | デモ用定義として残っています。COOP一覧の表示には使用していません。 |
+| `defaultRecipeCategories` | Firestoreにカテゴリがない世帯の初期カテゴリ作成に使用します。 |
+| `COOP_CATEGORIES` | COOP一覧の五つの表示カテゴリと手動修正の選択肢に使用します。 |

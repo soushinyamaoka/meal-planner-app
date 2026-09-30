@@ -135,6 +135,26 @@ export async function fetchCoopIngredients(): Promise<CoopData> {
   return res.json();
 }
 
+/** 商品名に対するCOOPカテゴリの上書きを保存する */
+export async function classifyCoopProduct(originalName: string, category: string): Promise<void> {
+  const validCategories = ["食材", "調理キット", "そのまま", "離乳食", "調味料・日用品"];
+  if (!originalName.trim() || !validCategories.includes(category)) {
+    throw new Error("商品名またはカテゴリが不正です。");
+  }
+  const { url, token } = await getCoopConfig();
+  const res = await fetchWithTimeout(`${url}/api/coop/classify`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ original_name: originalName, category }),
+  }, TIMEOUT_FAST);
+  if (res.status === 401) throw new Error("認証に失敗しました。トークンを確認してください。");
+  if (res.status === 400) throw new Error("分類リクエストが不正です。");
+  if (!res.ok) throw new Error(`サーバーエラー (${res.status})`);
+}
+
 /**
  * 食材からレシピを提案
  * POST /api/coop/suggest-recipes
