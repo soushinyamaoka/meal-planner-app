@@ -74,6 +74,10 @@ export type CoopData = {
   excluded: { name: string; reason: string }[];
 };
 
+export type CoopOrderHistoryItem = { name: string; original_name?: string; quantity: number; category: string };
+export type CoopOrderHistoryEntry = { order_date: string; total_items: number; ingredient_count?: number; kit_count?: number; items?: CoopOrderHistoryItem[] };
+export type CoopOrderHistoryResponse = { last_updated?: string; order_count: number; orders: CoopOrderHistoryEntry[] };
+
 export type SuggestRecipe = {
   name: string;
   source: "ai_generate" | "web_search";

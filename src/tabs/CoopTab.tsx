@@ -5,6 +5,8 @@ import { fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopM
 import { COOP_CATEGORIES } from "../data/sampleData";
 import { Recipe, Menus, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem } from "../types";
 import { s } from "../styles/appStyles";
+import { CoopOrderHistory } from "../components/CoopOrderHistory";
+import { AiMealPrompt } from "../components/AiMealPrompt";
 
 // ═══════════════════════════════════════════
 // COOP Tab
@@ -22,7 +24,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedCat, setExpandedCat] = useState<Set<string>>(new Set(["ingredients", "kits"]));
-  const [view, setView] = useState<"list" | "loading" | "suggestResult" | "planResult">("list");
+  const [view, setView] = useState<"list" | "loading" | "suggestResult" | "planResult" | "history" | "aiPrompt">("list");
   const [suggestResult, setSuggestResult] = useState<SuggestResult | null>(null);
   const [planResult, setPlanResult] = useState<PlanResult | null>(null);
   const [savedFlags, setSavedFlags] = useState<Record<string, boolean>>({});
@@ -174,6 +176,16 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
     }
     return names;
   };
+
+  if (view === "history") return <CoopOrderHistory onBack={() => setView("list")} />;
+  if (view === "aiPrompt") return <AiMealPrompt selectedNames={getSelectedNames()} menus={menus} recipes={recipes} setMenus={setMenus} onBack={() => setView("list")} />;
+
+  const shortcutButtons = (
+    <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+      <TouchableOpacity onPress={() => setView("history")} style={{ flex: 1, padding: 11, backgroundColor: "#f5ebe2", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#6a5d50", fontWeight: "700", fontSize: 12 }}>🕘 過去の注文</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => setView("aiPrompt")} style={{ flex: 1, padding: 11, backgroundColor: "#d4725c", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>🤖 AIに献立を相談</Text></TouchableOpacity>
+    </View>
+  );
 
   const handleSuggest = async (): Promise<void> => {
     const names = getSelectedNames(); if (names.length === 0) return;
@@ -394,7 +406,8 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
   }
   if (!coopData) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32, gap: 12 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ justifyContent: "center", alignItems: "center", padding: 24, gap: 12 }}>
+        {shortcutButtons}
         <Text style={{ fontSize: 40 }}>📦</Text>
         {error ? (
           <>
@@ -417,7 +430,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </ScrollView>
     );
   }
 
@@ -444,6 +457,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
             }
           </TouchableOpacity>
         </View>
+        {shortcutButtons}
         {error && (
           <View style={{ padding: 10, backgroundColor: "#fdeeed", borderRadius: 10, marginBottom: 8, gap: 8 }}>
             <Text style={{ fontSize: 12, color: "#c0564e" }}>{error}</Text>

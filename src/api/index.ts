@@ -8,7 +8,7 @@
  */
 
 import { getCoopConfig, getWebApiUrl } from '../config/coopConfig';
-import { WebSearchApiResult, CoopData, SuggestResult, PlanResult, SuggestOptions, MealPlanOptions, RecipeExtractResponse } from '../types';
+import { WebSearchApiResult, CoopData, SuggestResult, PlanResult, SuggestOptions, MealPlanOptions, RecipeExtractResponse, CoopOrderHistoryResponse } from '../types';
 
 // ═══════════════════════════════════════════
 // 共通: タイムアウト付きfetch
@@ -98,6 +98,17 @@ export async function fetchRecipeTitle(url: string): Promise<string | null> {
 // ═══════════════════════════════════════════
 // COOP API
 // ═══════════════════════════════════════════
+
+export async function fetchCoopOrderHistory(): Promise<CoopOrderHistoryResponse> {
+  const { url, token } = await getCoopConfig();
+  const res = await fetchWithTimeout(`${url}/api/coop/orders?include_items=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, TIMEOUT_FAST);
+  if (res.status === 404) return { order_count: 0, orders: [] };
+  if (res.status === 401) throw new Error("認証に失敗しました。トークンを確認してください。");
+  if (!res.ok) throw new Error(`サーバーエラー (${res.status})`);
+  return res.json();
+}
 
 /**
  * COOP注文食材の取得
