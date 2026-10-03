@@ -20,6 +20,7 @@ export type Recipe = {
   url?: string;
   categoryIds?: string[];
   showInList?: boolean; // false = 献立専用（レシピ一覧に表示しない）
+  memo?: string;
 };
 
 export type RecipeFormData = {
@@ -29,6 +30,7 @@ export type RecipeFormData = {
   steps: string[];
   url?: string;
   categoryIds?: string[];
+  memo?: string;
 };
 
 export type MenuItem = {

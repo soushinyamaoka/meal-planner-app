@@ -3,7 +3,9 @@ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "rea
 import { Notice } from "../api/notices";
 
 type Feed = { notices: Notice[]; unreadCount: number; stale: boolean; lastSuccessAt: number | null; fetchFailed: boolean; hasCache: boolean; refresh: () => void; markVisibleRead: () => void; isNewAtOpen: (id: string) => boolean };
-const dateLabel = (value?: string): string => value ? new Date(value).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+const maintenanceLabels: Record<string, string> = { scheduled: "メンテナンス予定", in_progress: "メンテナンス中", extended: "メンテナンス延長中", completed: "メンテナンス完了", cancelled: "メンテナンス中止" };
+const maintenanceLabel = (status?: string): string => (status && maintenanceLabels[status]) || "メンテナンス";
+const dateLabel =(value?: string): string => value ? new Date(value).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 export function NoticeBell({ count, onPress }: { count: number; onPress: () => void }) {
   return <TouchableOpacity onPress={onPress} accessibilityRole="button" accessibilityLabel={`お知らせ${count ? `、未読${count}件` : ""}`} style={s.bell}><Text style={{ fontSize: 22 }}>🔔</Text>{count > 0 && <View style={s.badge}><Text style={s.badgeText}>{count > 99 ? "99+" : count}</Text></View>}</TouchableOpacity>;
 }
@@ -13,7 +15,7 @@ export function MaintenanceBanner({ feed, onOpen }: { feed: Feed; onOpen: () => 
     .sort((a, b) => priority[b.maintenance!.status as keyof typeof priority] - priority[a.maintenance!.status as keyof typeof priority]);
   if (!active.length) return null;
   const n = active[0], status = n.maintenance!.status;
-  const label = status === "in_progress" ? "メンテナンス中" : status === "extended" ? "メンテナンス延長中" : "メンテナンス予定";
+  const label = maintenanceLabel(status);
   const text = `${feed.stale ? `${label}（最終確認 ${dateLabel(feed.lastSuccessAt ? new Date(feed.lastSuccessAt).toISOString() : undefined)}）` : label}：${n.title_ja}${active.length > 1 ? `、ほか${active.length - 1}件` : ""}`;
   return <TouchableOpacity onPress={onOpen} style={[s.banner, { backgroundColor: status === "scheduled" ? "#fff1d6" : "#fdeeed", borderColor: status === "scheduled" ? "#e5b35b" : "#c0564e" }]}><Text style={{ color: "#5a4936", fontWeight: "700", fontSize: 13 }}>{text}</Text></TouchableOpacity>;
 }
@@ -25,7 +27,7 @@ export function NoticesModal({ visible, onClose, feed }: { visible: boolean; onC
       <ScrollView>
         {staleMessage && <Text style={s.stale}>{staleMessage}</Text>}
         {feed.notices.length === 0 && <Text style={s.empty}>{feed.fetchFailed && !feed.hasCache ? "お知らせを取得できませんでした" : "現在お知らせはありません"}</Text>}
-        {feed.notices.map(n => <View key={n.notice_id} style={s.card}><View style={s.titleRow}><View style={[s.dot, !feed.isNewAtOpen(n.notice_id) && { opacity: 0 }]} /><Text style={s.kind}>{n.kind === "feature" ? "お知らせ" : `メンテナンス${n.maintenance ? `・${n.maintenance.status}` : ""}`}</Text></View><Text style={s.title}>{n.title_ja}</Text><Text style={s.body}>{n.message_ja}</Text>{n.action_ja ? <Text style={s.action}>{n.action_ja}</Text> : null}
+        {feed.notices.map(n => <View key={n.notice_id} style={s.card}><View style={s.titleRow}><View style={[s.dot, !feed.isNewAtOpen(n.notice_id) && { opacity: 0 }]} /><Text style={s.kind}>{n.kind === "feature" ? "お知らせ" : maintenanceLabel(n.maintenance?.status)}</Text></View><Text style={s.title}>{n.title_ja}</Text><Text style={s.body}>{n.message_ja}</Text>{n.action_ja ? <Text style={s.action}>{n.action_ja}</Text> : null}
           <Text style={s.date}>{n.kind === "feature" ? dateLabel(n.published_at) : [n.maintenance?.starts_at, n.maintenance?.expected_end_at].filter(Boolean).map(dateLabel).join("〜")}</Text>{n.kind === "maintenance" && n.maintenance?.next_update_at ? <Text style={s.date}>次回更新: {dateLabel(n.maintenance.next_update_at)}</Text> : null}
         </View>)}
         {feed.fetchFailed && <TouchableOpacity style={s.retry} onPress={feed.refresh}><Text style={{ color: "white", fontWeight: "700" }}>再試行</Text></TouchableOpacity>}

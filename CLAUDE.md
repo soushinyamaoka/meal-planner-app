@@ -76,9 +76,11 @@ setDoc(ref, stripUndefined(data));
 
 ```
 meal-planner-app/
-├── App.tsx                      ← メインアプリと主要タブ
+├── App.tsx                      ← メインアプリ（認証分岐・タブ切替・モーダル制御）
 ├── index.ts                     ← エントリポイント (registerRootComponent)
 ├── src/
+│   ├── tabs/                    ← 各タブ（MealsTab / NurseryMenuTab / RecipesTab[RecipeFormFull含む] / CoopTab）
+│   ├── styles/appStyles.ts      ← App・各タブ共通のStyleSheet（s）
 │   ├── types/index.ts           ← 共通型定義
 │   ├── api/index.ts             ← レシピ検索・COOP API関数
 │   ├── api/notices.ts           ← お知らせ取得と検証
@@ -86,7 +88,7 @@ meal-planner-app/
 │   ├── config/firebaseConfig.ts ← Firebase初期化
 │   ├── hooks/                    ← 認証・世帯・Firestore等の同期
 │   ├── screens/                  ← ログイン・世帯関連画面
-│   ├── components/               ← 共通UI
+│   ├── components/               ← 共通UI（RecipeModals: RecipeFormInline等 / RecipeShared: レシピ詳細・WEB検索）
 │   ├── data/sampleData.ts       ← 未使用のデモデータと使用中のカテゴリ定義
 │   └── utils/                   ← 日付処理・ローカルキャッシュ等
 ├── docs/
