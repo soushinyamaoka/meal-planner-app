@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261004-MEALPLANNER-001
 app: meal-planner-app
-status: ready
+status: delivered
 source_commit: 52b74437a97cfdaac96b1fe898d838da091409a3
-distribution_status: approved
+distribution_status: published
 release_gate: user_approved
 server_change_notice: ops/server-change-notices/20261004-COOPAPI-006-summary.md（coop-api側。アプリのrepoではなくcoop-apiのrepoにある）
 
@@ -52,11 +52,23 @@ server_change_notice: ops/server-change-notices/20261004-COOPAPI-006-summary.md�
 
 ## 配信後の記録
 
-（配信後に、update group ID・配信時刻・端末確認結果を追記する）
+配信日: 2026-10-04 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `c2d0670` は実remote mainと一致し、`52b7443..c2d0670` のops以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| android-internal | `bbc550d0-dd81-4e30-836b-a87112a64f87` | `exposdk:57.0.0` | android, ios |
+| default | `8f05dc47-761d-419a-8015-84d4a5494282` | `exposdk:57.0.0` | android, ios |
+
+- Androidのupdate ID: android-internal `01a10553-d8f4-7c6f-b779-576b92b4fd66` / default `01a10554-993f-77c3-b62f-bebe14e813a3`。iOSのupdate ID: android-internal `01a10553-d8f4-70d7-8026-5fe30fb4f72b` / default `01a10554-993f-7f14-89a9-2e9b1c6c4d99`。
+- EAS environment: `preview`。`--non-interactive`。バンドルはandroid・iOSとも新規asset無し（既存asset再利用）。
+- 配信コマンドの結果: どちらもexit 0。前回配信（2026-10-01）から `package.json`・`app.config.js`・`eas.json` の差分は無く、fingerprintの計算は成功した。
+- **端末確認: 未実施**。確認する項目: ①アプリを再起動して新しいbundleが適用されること、②COOPタブの「過去の注文」（サーバー反映前は日付と件数のみ、反映後は商品一覧）、③「AIに献立を相談」でプロンプト生成と、AIの回答の読み取り・プレビュー・置き換え反映（実データの献立が置き換わるため、確認用の日と料理を決めて行う）、④レシピのメモ欄（レシピタブと献立タブの両方）、⑤削除済みレシピを参照する献立に📖が出ないこと、⑥お知らせ一覧のメンテナンス状態が日本語であること。
+- Expo Go（iOS）は `default` を読む。Android実機は `android-internal` を読む。端末が新しいbundleを取得して切り替わるのは、次回起動以降。
+- 結果: 「アプリ側の配信は完了／端末確認は未実施」。サーバー側（通知006）のproduction反映は別途VPS管理側で実施中の想定で、こちらからは確認できていない。
 
 ## 承認と状態
 
 - app owner: 2026-10-04に配信を明示承認。
 - VPS management review: 本releaseはclient releaseであり、VPSのproduction変更ではない。サーバー側は通知 `20261004-COOPAPI-006` として別管理（技術受理済み・production反映は別承認）。
 - VPS production approval: 該当する操作なし（本releaseでサーバーへ変更を加えない）。
-- client distribution: approved（配信前）。
+- client distribution: published（2026-10-04、EAS Update両channel。端末確認は未実施）。
