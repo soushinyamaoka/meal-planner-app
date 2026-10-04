@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261004-MEALPLANNER-003
 app: meal-planner-app
-status: ready
+status: delivered
 source_commit: 000cf1a4a9d71769b507983da33c4d2a43d268d6
-distribution_status: approved
+distribution_status: published
 release_gate: user_approved
 server_change_notice: なし（本releaseはクライアントのみ。サーバー・APIの変更はない）
 
@@ -43,11 +43,22 @@ server_change_notice: なし（本releaseはクライアントのみ。サーバ
 
 ## 配信後の記録
 
-（配信後に、update group ID・配信時刻・端末確認結果を追記する）
+配信日: 2026-10-04 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `8b772fb` は実remote mainと一致し、`000cf1a..8b772fb` のops以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| android-internal | `8f67c3ea-0f60-478b-88b0-ddff26abe38b` | `exposdk:57.0.0` | android, ios |
+| default | `7f1531e7-e412-40b5-9f24-dfa8d85b4d2b` | `exposdk:57.0.0` | android, ios |
+
+- Androidのupdate ID: android-internal `01a10630-e9ba-76ff-8aec-ebf9ac9e5369` / default `01a10631-7a87-7497-9249-9616e3e599fb`。iOSのupdate ID: android-internal `01a10630-e9ba-7b2b-b943-0bdd31e627d9` / default `01a10631-7a87-7a92-8f2f-150b799b6bb6`。
+- EAS environment: `preview`。`--non-interactive`。どちらもexit 0。
+- **端末確認: 未実施**。確認する項目: ①アプリを完全に閉じて開き直し、新しいbundleが適用されること、②実際のチャット出力（改行が崩れたもの）を貼り付けて「読み取る」と、日ごとの料理と「材料N品・手順N」が表示されること、③長い回答を貼っても貼り付け欄が画面いっぱいにならず、「読み取る」が欄の直下で押せること、④読み取り後、プレビューの位置まで画面が送られること、⑤「クリア」で欄とプレビューが消えること、⑥「献立に反映」後、献立タブで料理を開くと材料と作り方が見えること。**反映は指定日の献立を置き換えるので、使っていない先の日付で確認する。**
+- Expo Go（iOS）は `default`、Android実機は `android-internal` を読む。新しいbundleに切り替わるのは次回起動以降。
+- 結果: 「アプリ側の配信は完了／端末確認は未実施」。
 
 ## 承認と状態
 
 - app owner: 2026-10-04に配信を明示承認。
 - VPS management review: クライアントのみの変更で、サーバー変更通知は不要。
 - VPS production approval: 該当する操作なし。
-- client distribution: approved（配信前）。
+- client distribution: published（2026-10-04、EAS Update両channel。端末確認は未実施）。
