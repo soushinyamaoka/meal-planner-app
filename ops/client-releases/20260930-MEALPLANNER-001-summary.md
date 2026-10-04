@@ -40,9 +40,19 @@ VPS管理からCOOP APIの稼働commitを `f4259490f78f5b358a6eec938e86281148866
 - rollback: 直前の安定版updateを対象branchへ再配信する方針。端末が取得済みbundleを切り替える時期、再起動、cache、runtime互換性を確認する。分類JSONやFirestoreへ既に書かれた値はclient rollbackだけでは戻らない。
 - 配信後の記録: update group/build ID、配信時刻、対象platform、端末確認結果を本記録に追記する。
 
+## 配信記録（2026-10-01）
+
+- 前提: VPS管理側がCOOP API本番反映（稼働・health確認）、分類データの本番保存・権限・deploy読取、手動backupへの収録、実archiveの隔離復元を確認済みと、ユーザーから報告を受領。ユーザーが配信を明示承認。2026-10-02 03:10 JSTの自然backupは配信後の確認として追跡（未確認）。
+- 配信source: `4facc8a`（配信時HEAD `49d03e6` はops文書のみの差分、作業ツリーclean、`npm run typecheck` 終了コード0）。直前の配信済み `20e7c90` から `package.json`（typecheck script追加のみ）以外の依存・`app.config.js`・`eas.json`は変更なし。native変更なしのためOTAで配信。
+- runtime: `exposdk:57.0.0`（既存配信と同一）。platform: android, ios。EAS environment: `preview`（本アプリで変数が設定されている環境）。
+- android-internal: update group `f6bfeae4-7a5f-42ff-a5b5-73870a5878a4`
+- default: update group `15c35add-71d5-43b5-aa54-b74b029d5d5b`
+- rollback先（直前の安定版）: android-internal `6e30da25-73da-4e96-bdd2-194bd632184c` / default `dc7fdddf-2331-436e-9beb-4b1076b89329`
+- 端末確認（COOP一覧GET、手動POST、分類PUT後GET、献立の確認表示、レシピ保持、保存失敗表示）: **未実施**。
+
 ## 承認と状態
 
 - app owner: Claudeへ端末配信を依頼する方針。対象releaseを特定した配信の個別承認は未取得。
 - VPS management review: notice `20260930-MEALPLANNER-001` は技術受理との報告をユーザーから受領。モバイルbaseline未登録は手動審査。分類PUT対策とCOOPバックアップ復旧・隔離復元の完了待ち。
 - VPS production approval: 該当する操作なし。
-- client distribution: not_started。
+- client distribution: delivered（2026-10-01、EAS Update両channel。端末確認は未実施）。
