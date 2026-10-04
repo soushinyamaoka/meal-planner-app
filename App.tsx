@@ -43,7 +43,7 @@ function ExternalNoticeLayout({ children, feed, visible, onOpen, onClose }: {
 export default function App() {
   const { user, loading: authLoading, authLoading: signingIn, error: authError, setError: clearAuthError, signIn, signUp, resetPassword, logout } = useAuth();
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
-  const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, loadingData, loadError: dataError, saveError, dismissSaveFailure } = useFirestore(household?.id ?? null);
+  const { menus, setMenus, recipes, setRecipes, categories, setCategories, saveRecipeWithMenu, saveRecipesWithMenus, loadingData, loadError: dataError, saveError, dismissSaveFailure } = useFirestore(household?.id ?? null);
   const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
   const notices = useNoticesFeed();
   const [noticesOpen, setNoticesOpen] = useState(false);
@@ -269,7 +269,7 @@ export default function App() {
       )}
       {/* CoopTabはタブ切替時もマウント維持（提案結果のsavedFlags等を保持） */}
       <View style={{ flex: 1, display: tab === "coop" ? "flex" : "none" }}>
-        <CoopTab recipes={recipes} setRecipes={setRecipes} menus={menus} setMenus={setMenus} />
+        <CoopTab recipes={recipes} setRecipes={setRecipes} menus={menus} setMenus={setMenus} saveRecipesWithMenus={saveRecipesWithMenus} />
       </View>
       {tab === "settings" && (
         <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} enableOnAndroid extraScrollHeight={16}>

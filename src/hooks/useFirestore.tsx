@@ -288,6 +288,36 @@ export function useFirestore(householdId: string | null) {
     [householdId]
   );
 
+  const saveRecipesWithMenus = useCallback((newRecipes: Recipe[], menuUpdates: Record<string, MenuItem[]>): void => {
+    setRecipesLocal((prev) => {
+      const next = [...prev];
+      newRecipes.forEach((recipe) => {
+        const index = next.findIndex((item) => item.id === recipe.id);
+        if (index < 0) next.push(recipe); else next[index] = recipe;
+      });
+      return next;
+    });
+    setMenusLocal((prev) => {
+      const next = { ...prev };
+      Object.entries(menuUpdates).forEach(([dateKey, items]) => {
+        if (items.length === 0) delete next[dateKey]; else next[dateKey] = items;
+      });
+      if (householdId) {
+        const batch = writeBatch(db);
+        newRecipes.forEach(({ id, ...data }) => {
+          batch.set(doc(db, `households/${householdId}/recipes`, id), stripUndefined(data));
+        });
+        Object.entries(menuUpdates).forEach(([dateKey, items]) => {
+          const ref = doc(db, `households/${householdId}/menus`, dateKey);
+          if (items.length === 0) batch.delete(ref);
+          else batch.set(ref, stripUndefined({ items }));
+        });
+        trackUserWrite(batch.commit(), householdId);
+      }
+      return next;
+    });
+  }, [householdId]);
+
   // ─── setMenus（React.Dispatch互換） ─────────────────────────────────────────
   const setMenus = useCallback(
     (updater: React.SetStateAction<Menus>): void => {
@@ -400,5 +430,6 @@ export function useFirestore(householdId: string | null) {
     setRecipes,
     setCategories,
     saveRecipeWithMenu,
+    saveRecipesWithMenus,
   };
 }

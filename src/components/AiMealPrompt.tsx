@@ -2,10 +2,10 @@ import React, { useMemo, useState } from "react";
 import { Alert, ScrollView, Share, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { formatDate, genId, getDateKey } from "../utils/helpers";
 import { buildAiMealPrompt, parseAiMealPlan, ParsedMeal } from "../utils/aiMealPlan";
-import { Menus, Recipe } from "../types";
+import { Menus, Recipe, MenuItem } from "../types";
 
-type Props = { selectedNames: string[]; menus: Menus; recipes: Recipe[]; setMenus: React.Dispatch<React.SetStateAction<Menus>>; onBack: () => void };
-export function AiMealPrompt({ selectedNames, menus, recipes, setMenus, onBack }: Props) {
+type Props = { selectedNames: string[]; menus: Menus; recipes: Recipe[]; saveRecipesWithMenus: (recipes: Recipe[], menuUpdates: Record<string, MenuItem[]>) => void; onBack: () => void };
+export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMenus, onBack }: Props) {
   const [ingredients, setIngredients] = useState(selectedNames);
   const [otherIngredients, setOtherIngredients] = useState("");
   const [startOffset, setStartOffset] = useState(0);
@@ -17,6 +17,7 @@ export function AiMealPrompt({ selectedNames, menus, recipes, setMenus, onBack }
   const [preview, setPreview] = useState<ParsedMeal[] | null>(null);
   const [unreadable, setUnreadable] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const startDate = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + startOffset); return d; }, [startOffset]);
   const allIngredients = [...ingredients, ...otherIngredients.split(/[\n、,，]+/).map(x => x.trim()).filter(Boolean)];
   const adjust = (value: number, delta: number, min: number, max: number, setter: (v: number) => void) => setter(Math.max(min, Math.min(max, value + delta)));
@@ -25,11 +26,24 @@ export function AiMealPrompt({ selectedNames, menus, recipes, setMenus, onBack }
   const readAnswer = () => { const result = parseAiMealPlan(answer, startDate); setPreview(result.meals); setUnreadable(result.unreadableLines); setNotice(""); };
   const apply = () => {
     if (!preview?.length) return;
-    const byDate = new Map(preview.map(day => [day.dateKey, day.dishes.map(name => {
-      const recipe = recipes.find(r => r.showInList !== false && r.name === name);
-      return recipe ? { id: genId(), name, recipeId: recipe.id } : { id: genId(), name };
-    })]));
-    setMenus(current => { const next = { ...current }; byDate.forEach((items, dateKey) => { next[dateKey] = items; }); return next; });
+    const created = new Map<string, Recipe>();
+    const menuUpdates: Record<string, MenuItem[]> = {};
+    preview.forEach(day => {
+      menuUpdates[day.dateKey] = day.dishes.map(dish => {
+        const registered = recipes.find(r => r.showInList !== false && r.name === dish.name);
+        if (registered) return { id: genId(), name: dish.name, recipeId: registered.id };
+        if (dish.ingredients.length && dish.steps.length) {
+          let recipe = created.get(dish.name);
+          if (!recipe) {
+            recipe = { id: genId(), name: dish.name, ingredients: dish.ingredients, steps: dish.steps, showInList: false };
+            created.set(dish.name, recipe);
+          }
+          return { id: genId(), name: dish.name, recipeId: recipe.id };
+        }
+        return { id: genId(), name: dish.name };
+      });
+    });
+    saveRecipesWithMenus([...created.values()], menuUpdates);
     setNotice(`${preview.length}日分の献立を反映しました`); setPreview(null);
   };
   return <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
@@ -42,8 +56,29 @@ export function AiMealPrompt({ selectedNames, menus, recipes, setMenus, onBack }
     <Text style={label}>補足（任意）</Text><TextInput value={notes} onChangeText={setNotes} multiline placeholder="好み・苦手・アレルギーなど" style={input} />
     {button("プロンプトを作成", () => setPrompt(buildAiMealPrompt({ startDate, days, people, ingredients: allIngredients, notes })))}
     {prompt ? <><Text selectable style={[input, { marginTop: 10, lineHeight: 21 }]}>{prompt}</Text>{button("共有・コピー", () => { void Share.share({ message: prompt }).catch(() => Alert.alert("共有できませんでした")); }, "#8a7e72")}</> : null}
-    <Text style={label}>AIの回答を貼り付け</Text><TextInput value={answer} onChangeText={setAnswer} multiline placeholder="例: 10/5: 鶏の照り焼き / 味噌汁" style={[input, { minHeight: 100, textAlignVertical: "top" }]} />{button("読み取る", readAnswer)}
-    {preview && <View style={{ marginTop: 12, padding: 12, backgroundColor: "#fffcf8", borderRadius: 10 }}>{preview.length === 0 && <Text>読み取れる献立がありません。</Text>}{preview.map(day => { const existing = menus[day.dateKey] ?? []; const fd = formatDate(day.date); return <View key={day.dateKey} style={{ marginBottom: 10 }}><Text style={{ fontWeight: "700", color: "#4a3f36" }}>{fd.month}/{fd.day}({fd.weekday}) {day.dishes.join(" / ")}</Text>{existing.length > 0 && <Text style={{ color: "#b05d28", fontSize: 12 }}>⚠ 既存の献立（{existing.map(x => x.name).join("、")}）を置き換えます</Text>}</View>; })}{unreadable.length > 0 && <View><Text style={{ fontWeight: "700", color: "#8a7e72" }}>読み取れなかった行</Text>{unreadable.map((line, i) => <Text key={i} style={{ color: "#8a7e72" }}>{line || "（空行）"}</Text>)}</View>}{preview.length > 0 && button("献立に反映", apply)}</View>}
+    <Text style={label}>AIの回答を貼り付け</Text><TextInput value={answer} onChangeText={setAnswer} multiline placeholder="例: 10/5の下に■料理名・材料・作り方を記載" style={[input, { minHeight: 100, textAlignVertical: "top" }]} />{button("読み取る", readAnswer)}
+    {preview && <View style={{ marginTop: 12, padding: 12, backgroundColor: "#fffcf8", borderRadius: 10 }}>
+      {preview.length === 0 && <Text>読み取れる献立がありません。</Text>}
+      {preview.map(day => {
+        const existing = menus[day.dateKey] ?? []; const fd = formatDate(day.date);
+        return <View key={day.dateKey} style={{ marginBottom: 10 }}>
+          <Text style={{ fontWeight: "700", color: "#4a3f36" }}>{fd.month}/{fd.day}({fd.weekday})</Text>
+          {day.dishes.map((dish, i) => {
+            const key = `${day.dateKey}-${i}`; const registered = recipes.some(r => r.showInList !== false && r.name === dish.name); const complete = dish.ingredients.length > 0 && dish.steps.length > 0;
+            return <View key={key} style={{ marginTop: 6, padding: 8, backgroundColor: "#fff", borderRadius: 7 }}>
+              <Text style={{ fontWeight: "600", color: "#4a3f36" }}>{dish.name}</Text>
+              {registered ? <Text style={{ color: "#587a54", fontSize: 12 }}>📖 登録済みのレシピを使います</Text> : complete ? <View>
+                <TouchableOpacity onPress={() => setExpanded(current => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })}><Text style={{ color: "#6a5d50", fontSize: 12 }}>材料{dish.ingredients.length}品・手順{dish.steps.length} {expanded.has(key) ? "▾" : "▸"}</Text></TouchableOpacity>
+                {expanded.has(key) && <View style={{ marginTop: 5 }}><Text style={{ fontWeight: "600", color: "#8a7e72" }}>材料</Text>{dish.ingredients.map((item, n) => <Text key={`i-${n}`} style={{ color: "#5a4a3c", fontSize: 12 }}>・{item}</Text>)}<Text style={{ marginTop: 4, fontWeight: "600", color: "#8a7e72" }}>作り方</Text>{dish.steps.map((item, n) => <Text key={`s-${n}`} style={{ color: "#5a4a3c", fontSize: 12 }}>{n + 1}. {item}</Text>)}</View>}
+              </View> : <Text style={{ color: "#b05d28", fontSize: 12 }}>⚠ 作り方がありません（料理名だけ反映します）</Text>}
+            </View>;
+          })}
+          {existing.length > 0 && <Text style={{ color: "#b05d28", fontSize: 12, marginTop: 4 }}>⚠ 既存の献立（{existing.map(x => x.name).join("、")}）を置き換えます</Text>}
+        </View>;
+      })}
+      {unreadable.length > 0 && <View><Text style={{ fontWeight: "700", color: "#8a7e72" }}>読み取れなかった行</Text>{unreadable.map((line, i) => <Text key={i} style={{ color: "#8a7e72" }}>{line || "（空行）"}</Text>)}</View>}
+      {preview.length > 0 && button("献立に反映", apply)}
+    </View>}
   </ScrollView>;
 }
 

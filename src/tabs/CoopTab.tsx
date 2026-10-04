@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking } 
 import { getDateKey, formatDate, getEmoji, genId } from "../utils/helpers";
 import { fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopMealPlan, classifyCoopProduct } from "../api";
 import { COOP_CATEGORIES } from "../data/sampleData";
-import { Recipe, Menus, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem } from "../types";
+import { Recipe, Menus, MenuItem, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem } from "../types";
 import { s } from "../styles/appStyles";
 import { CoopOrderHistory } from "../components/CoopOrderHistory";
 import { AiMealPrompt } from "../components/AiMealPrompt";
@@ -16,9 +16,10 @@ type CoopTabProps = {
   setRecipes: React.Dispatch<React.SetStateAction<Recipe[]>>;
   menus: Menus;
   setMenus: React.Dispatch<React.SetStateAction<Menus>>;
+  saveRecipesWithMenus: (recipes: Recipe[], menuUpdates: Record<string, MenuItem[]>) => void;
 };
 
-export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) {
+export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithMenus }: CoopTabProps) {
   const [coopData, setCoopData] = useState<CoopData | null>(null);
   const [fetching, setFetching] = useState<boolean>(false); // データ取得中フラグ
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +179,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
   };
 
   if (view === "history") return <CoopOrderHistory onBack={() => setView("list")} />;
-  if (view === "aiPrompt") return <AiMealPrompt selectedNames={getSelectedNames()} menus={menus} recipes={recipes} setMenus={setMenus} onBack={() => setView("list")} />;
+  if (view === "aiPrompt") return <AiMealPrompt selectedNames={getSelectedNames()} menus={menus} recipes={recipes} saveRecipesWithMenus={saveRecipesWithMenus} onBack={() => setView("list")} />;
 
   const shortcutButtons = (
     <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, alignSelf: "stretch" }}>
