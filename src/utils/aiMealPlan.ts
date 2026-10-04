@@ -5,6 +5,23 @@ export type ParseMealPlanResult = { meals: ParsedMeal[]; unreadableLines: string
 const normalizeDigits = (s: string): string => s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 const cleanItem = (s: string): string => s.trim().replace(/^(?:(?:[-・*])\s*|(?:\d+[.)．、]|[①-⑳])\s*)/, "").trim();
 
+// チャット画面からのコピーで改行が崩れ、別々の行にあるはずのものが同じ行に付くことがある。
+// 読み取る前に、次の2つの形を別の行へ切り分ける。
+//  1. 日付の直後に料理が付く行: 「10/4 ■ 金目鯛の干物焼き 材料:」→「10/4」「■ 金目鯛の干物焼き 材料:」
+//  2. 末尾に見出しが付く行: 「■ 料理名 材料:」「青首大根 120g 作り方:」→ 見出しを別の行へ
+// 見出しだけの行（「材料:」「材料（2人分）:」）や、見出しの後ろに文字がある行（「材料: 鶏肉」）は、そのまま通す。
+const DATE_THEN_DISH = /^((?:#{1,3}\s*)?(?:[0-9０-９]{1,2}\s*[\/／]\s*[0-9０-９]{1,2}|[0-9０-９]{1,2}\s*月\s*[0-9０-９]{1,2}\s*日)(?:\s*[（(][日月火水木金土](?:曜日?)?[）)])?)\s*([■□●◆].*)$/;
+const TRAILING_HEADING = /^(.*\S)\s+([【\[]?\s*(?:材料|作り方|手順)\s*[】\]]?\s*[:：])\s*$/;
+function splitGluedLines(lines: string[]): string[] {
+  return lines.flatMap(line => {
+    const dated = line.match(DATE_THEN_DISH);
+    return (dated ? [dated[1], dated[2]] : [line]).flatMap(part => {
+      const m = part.match(TRAILING_HEADING);
+      return m ? [m[1], m[2]] : [part];
+    });
+  });
+}
+
 export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanResult {
   const anchor = new Date(startDate); anchor.setHours(0, 0, 0, 0);
   const byKey = new Map<string, ParsedMeal>();
@@ -13,7 +30,7 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
   let currentKind: "ingredients" | "steps" | null = null;
   // 料理は直前に読んだ日付へ付ける（日付が降順・順不同でもずれないようにする）
   let currentMeal: ParsedMeal | null = null;
-  for (const raw of text.split(/\r?\n/)) {
+  for (const raw of splitGluedLines(text.split(/\r?\n/))) {
     if (!raw.trim()) continue;
     const normalized = normalizeDigits(raw).replace(/\*\*/g, "").trim();
     let line = normalized.replace(/^#{1,3}\s*/, "").trim();
