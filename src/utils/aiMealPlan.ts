@@ -9,9 +9,10 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
   const unreadableLines: string[] = [];
   for (const raw of text.split(/\r?\n/)) {
     if (!raw.trim()) { unreadableLines.push(raw); continue; }
-    let line = normalizeDigits(raw).trim().replace(/^\s*(?:(?:[-・*])|(?:\d+\.))\s*/, "").replace(/\*\*/g, "").trim();
-    line = line.replace(/[（(][日月火水木金土](?:曜日)?[）)]\s*$/, "").trim();
-    const match = line.match(/^(\d{1,2})(?:[\/／](\d{1,2})|(月)(\d{1,2})日)\s*(?::|：)?\s*(.*)$/);
+    // 太字(**)を先に外す。先に箇条書き記号を外すと、行頭の「**」の片方が記号として消えてしまう。
+    const line = normalizeDigits(raw).replace(/\*\*/g, "").trim().replace(/^(?:[-・*]|\d+\.)\s*/, "").trim();
+    // 曜日は日付の直後にあるものだけを無視する（料理名には触れない）。
+    const match = line.match(/^(\d{1,2})(?:[\/／](\d{1,2})|(月)(\d{1,2})日)(?:\s*[（(][日月火水木金土](?:曜日?)?[）)])?\s*[:：]?\s*(.*)$/);
     if (!match) { unreadableLines.push(raw); continue; }
     const month = Number(match[1]);
     const day = Number(match[2] ?? match[4]);

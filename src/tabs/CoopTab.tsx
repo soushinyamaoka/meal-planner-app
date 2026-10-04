@@ -181,7 +181,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus }: CoopTabProps) 
   if (view === "aiPrompt") return <AiMealPrompt selectedNames={getSelectedNames()} menus={menus} recipes={recipes} setMenus={setMenus} onBack={() => setView("list")} />;
 
   const shortcutButtons = (
-    <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+    <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, alignSelf: "stretch" }}>
       <TouchableOpacity onPress={() => setView("history")} style={{ flex: 1, padding: 11, backgroundColor: "#f5ebe2", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#6a5d50", fontWeight: "700", fontSize: 12 }}>🕘 過去の注文</Text></TouchableOpacity>
       <TouchableOpacity onPress={() => setView("aiPrompt")} style={{ flex: 1, padding: 11, backgroundColor: "#d4725c", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>🤖 AIに献立を相談</Text></TouchableOpacity>
     </View>
