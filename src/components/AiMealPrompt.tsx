@@ -25,10 +25,12 @@ export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMen
   const button = (label: string, onPress: () => void, color = "#d4725c") => <TouchableOpacity onPress={onPress} style={{ padding: 11, alignItems: "center", backgroundColor: color, borderRadius: 9, marginTop: 10 }}><Text style={{ color: "white", fontWeight: "700" }}>{label}</Text></TouchableOpacity>;
   const readAnswer = () => { const result = parseAiMealPlan(answer, startDate); setPreview(result.meals); setUnreadable(result.unreadableLines); setNotice(""); };
   const apply = () => {
-    if (!preview?.length) return;
+    // 料理のない日付（回答が途中で切れた等）は反映しない。空で置き換えると、その日の献立が消えるため。
+    const days = (preview ?? []).filter(day => day.dishes.length > 0);
+    if (!days.length) return;
     const created = new Map<string, Recipe>();
     const menuUpdates: Record<string, MenuItem[]> = {};
-    preview.forEach(day => {
+    days.forEach(day => {
       menuUpdates[day.dateKey] = day.dishes.map(dish => {
         const registered = recipes.find(r => r.showInList !== false && r.name === dish.name);
         if (registered) return { id: genId(), name: dish.name, recipeId: registered.id };
@@ -44,7 +46,7 @@ export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMen
       });
     });
     saveRecipesWithMenus([...created.values()], menuUpdates);
-    setNotice(`${preview.length}日分の献立を反映しました`); setPreview(null);
+    setNotice(`${days.length}日分の献立を反映しました`); setPreview(null);
   };
   return <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 }}><TouchableOpacity onPress={onBack} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 8 }}><Text style={{ color: "#a08979" }}>← 戻る</Text></TouchableOpacity><Text style={{ fontSize: 17, fontWeight: "700", color: "#4a3f36" }}>🤖 AIに献立を相談</Text></View>
@@ -73,11 +75,13 @@ export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMen
               </View> : <Text style={{ color: "#b05d28", fontSize: 12 }}>⚠ 作り方がありません（料理名だけ反映します）</Text>}
             </View>;
           })}
-          {existing.length > 0 && <Text style={{ color: "#b05d28", fontSize: 12, marginTop: 4 }}>⚠ 既存の献立（{existing.map(x => x.name).join("、")}）を置き換えます</Text>}
+          {day.dishes.length === 0
+            ? <Text style={{ color: "#b05d28", fontSize: 12, marginTop: 4 }}>⚠ 料理がありません（この日は反映しません）</Text>
+            : existing.length > 0 && <Text style={{ color: "#b05d28", fontSize: 12, marginTop: 4 }}>⚠ 既存の献立（{existing.map(x => x.name).join("、")}）を置き換えます</Text>}
         </View>;
       })}
       {unreadable.length > 0 && <View><Text style={{ fontWeight: "700", color: "#8a7e72" }}>読み取れなかった行</Text>{unreadable.map((line, i) => <Text key={i} style={{ color: "#8a7e72" }}>{line || "（空行）"}</Text>)}</View>}
-      {preview.length > 0 && button("献立に反映", apply)}
+      {preview.some(day => day.dishes.length > 0) && button("献立に反映", apply)}
     </View>}
   </ScrollView>;
 }

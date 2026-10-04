@@ -11,6 +11,8 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
   const unreadableLines: string[] = [];
   let activeDish: ParsedDish | null = null;
   let currentKind: "ingredients" | "steps" | null = null;
+  // 料理は直前に読んだ日付へ付ける（日付が降順・順不同でもずれないようにする）
+  let currentMeal: ParsedMeal | null = null;
   for (const raw of text.split(/\r?\n/)) {
     if (!raw.trim()) continue;
     const normalized = normalizeDigits(raw).replace(/\*\*/g, "").trim();
@@ -21,7 +23,8 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
 
     const dateMatch = line.match(/^(\d{1,2})(?:[\/／](\d{1,2})|(月)(\d{1,2})日)(?:\s*[（(][日月火水木金土](?:曜日?)?[）)])?\s*(?:(?:[:：])\s*(.*))?$/);
     if (dateMatch) {
-      activeDish = null; currentKind = null;
+      // 読めない日付の後ろの料理を、前の日付へ付けないようにする
+      activeDish = null; currentKind = null; currentMeal = null;
       const month = Number(dateMatch[1]);
       const day = Number(dateMatch[2] ?? dateMatch[4]);
       if (month < 1 || month > 12 || day < 1 || day > 31) { unreadableLines.push(raw); continue; }
@@ -37,12 +40,12 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
       const dishes: ParsedDish[] = [];
       const legacy = dateMatch[5]?.trim();
       if (legacy) legacy.split(/[\/／、,，]/).map(x => x.trim()).filter(Boolean).forEach(name => dishes.push({ name, ingredients: [], steps: [] }));
-      byKey.set(dateKey, { date, dateKey, dishes });
-      activeDish = null; currentKind = null;
+      currentMeal = { date, dateKey, dishes };
+      byKey.set(dateKey, currentMeal);
       continue;
     }
 
-    const meal = [...byKey.values()].sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+    const meal = currentMeal;
     const dishMatch = line.match(/^[■□●◆]\s*(.+)$/);
     if (dishMatch) {
       if (!meal) { unreadableLines.push(raw); continue; }
@@ -65,7 +68,10 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
     }
     if (activeDish && currentKind) {
       const item = cleanItem(line);
-      const looksNarrative = /(?:以上(?:です)?|まとめ|召し上がれ|どうぞ|ぜひ|今回は|以下)|[。！？!?]$/.test(item);
+      // 箇条書き記号や番号の付いた行は、常に材料・作り方の項目とする（「。」で終わる手順も含む）。
+      // 記号のない行だけ、締めくくりの文章らしい言葉で説明文と判定し、項目に入れない。
+      const hasMarker = item !== line.trim();
+      const looksNarrative = !hasMarker && /^(?:以上|まとめ)|召し上がれ|お楽しみ|いかがでしょう|参考にして/.test(item);
       if (item && !looksNarrative) {
         activeDish[currentKind].push(item);
         continue;
