@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261004-MEALPLANNER-002
 app: meal-planner-app
-status: ready
+status: delivered
 source_commit: e1259d475e7e2207b26a7cec5c1f249362da5433
-distribution_status: approved
+distribution_status: published
 release_gate: user_approved
 server_change_notice: なし（本releaseはクライアントのみ。サーバー・APIの変更はない）
 
@@ -51,11 +51,22 @@ server_change_notice: なし（本releaseはクライアントのみ。サーバ
 
 ## 配信後の記録
 
-（配信後に、update group ID・配信時刻・端末確認結果を追記する）
+配信日: 2026-10-04 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `ef64a54` は実remote mainと一致し、`e1259d4..ef64a54` のops以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| android-internal | `832c2779-d83d-4b80-ac6c-b9dd90c2597b` | `exposdk:57.0.0` | android, ios |
+| default | `8844fb1d-4ff8-4dac-9c31-4426f778d800` | `exposdk:57.0.0` | android, ios |
+
+- Androidのupdate ID: android-internal `01a10621-897b-7747-ad21-f1e53ef9fdec` / default `01a10622-3581-762c-8041-16d6075d68d4`。iOSのupdate ID: android-internal `01a10621-897b-7b36-b988-ff2d6f9b638b` / default `01a10622-3581-7daa-9353-8889fa2a7a65`。
+- EAS environment: `preview`。`--non-interactive`。どちらもexit 0。
+- **端末確認: 未実施**。確認する項目: ①アプリを再起動して新しいbundleが適用されること、②COOPタブ「AIに献立を相談」で相談文を作成すると、回答形式に「■料理名・材料:・作り方:」が含まれ、材料を指定した人数分で書くよう指示があること、③実際にAIの回答を貼り付けて「読み取る」と、日ごとの料理と「材料N品・手順N」が表示され、展開して中身が見えること、④「献立に反映」後、献立タブでその料理を開くと材料と作り方が見えること、⑤レシピタブの一覧には増えないこと（献立専用）、⑥登録済みのレシピと同名の料理が「登録済みのレシピを使います」になること、⑦反映先の日に既存の献立がある場合の警告表示。**実データの献立が置き換わるため、確認には、使っていない先の日付を選ぶ。**
+- Expo Go（iOS）は `default`、Android実機は `android-internal` を読む。新しいbundleに切り替わるのは次回起動以降。
+- 結果: 「アプリ側の配信は完了／端末確認は未実施」。
 
 ## 承認と状態
 
 - app owner: 2026-10-04に配信を明示承認。
 - VPS management review: クライアントのみの変更で、サーバー変更通知は不要。
 - VPS production approval: 該当する操作なし。
-- client distribution: approved（配信前）。
+- client distribution: published（2026-10-04、EAS Update両channel。端末確認は未実施）。
