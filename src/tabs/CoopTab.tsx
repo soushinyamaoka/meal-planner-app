@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking } from "react-native";
 import { getDateKey, formatDate, getEmoji, genId } from "../utils/helpers";
+import { formatCoopOrderAmount, formatCoopOrderDate, getCoopOrderDateLabel } from "../utils/coopOrderFormatting";
 import { fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopMealPlan, classifyCoopProduct } from "../api";
 import { COOP_CATEGORIES } from "../data/sampleData";
 import { Recipe, Menus, MenuItem, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem } from "../types";
@@ -437,6 +438,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
 
   const selectedNames = getSelectedNames();
   const totalItems = COOP_CATEGORIES.reduce((sum, cat) => sum + (coopData[cat.key] || []).length, 0);
+  const orderAmount = formatCoopOrderAmount(coopData.total_amount_tax_included);
 
   return (
     <View style={{ flex: 1 }}>
@@ -444,8 +446,8 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
         <View style={s.coopOrderInfo}>
           <Text style={{ fontSize: 20 }}>📦</Text>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: "#4a3f36" }}>注文日: {coopData.order_date}</Text>
-            <Text style={{ fontSize: 11, color: "#b8a594" }}>合計 {totalItems} アイテム</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#4a3f36" }}>{getCoopOrderDateLabel(coopData.order_date_source)}: {formatCoopOrderDate(coopData.order_date)}</Text>
+            <Text style={{ fontSize: 11, color: "#b8a594" }}>合計 {totalItems} アイテム{orderAmount !== null ? `　合計 ${orderAmount}円（税込）` : ""}</Text>
           </View>
           <TouchableOpacity
             style={[s.refreshBtn, fetching && { opacity: 0.6 }]}

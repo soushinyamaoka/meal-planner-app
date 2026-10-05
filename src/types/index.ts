@@ -65,6 +65,9 @@ export type CoopCategory = {
 
 export type CoopData = {
   order_date: string;
+  order_date_source?: "delivery_schedule" | "email_date" | "import_time" | null;
+  total_amount_tax_included?: number | null;
+  total_amount_excluding_tax?: number | null;
   parsed_at: string;
   ingredients: CoopItem[];
   kits: CoopItem[];
@@ -75,7 +78,7 @@ export type CoopData = {
 };
 
 export type CoopOrderHistoryItem = { name: string; original_name?: string; quantity: number; category: string };
-export type CoopOrderHistoryEntry = { order_date: string; total_items: number; ingredient_count?: number; kit_count?: number; items?: CoopOrderHistoryItem[] };
+export type CoopOrderHistoryEntry = { order_date: string; order_date_source?: "delivery_schedule" | "email_date" | "import_time" | null; total_amount_tax_included?: number | null; total_amount_excluding_tax?: number | null; total_items: number; ingredient_count?: number; kit_count?: number; items?: CoopOrderHistoryItem[] };
 export type CoopOrderHistoryResponse = { last_updated?: string; order_count: number; orders: CoopOrderHistoryEntry[] };
 
 export type SuggestRecipe = {
