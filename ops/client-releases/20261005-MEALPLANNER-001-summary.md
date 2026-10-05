@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261005-MEALPLANNER-001
 app: meal-planner-app
-status: ready
+status: delivered
 source_commit: 197de82af147059a251b5a7bc3ff1935a31e1e3a
-distribution_status: approved
+distribution_status: published
 release_gate: user_approved
 server_change_notice: coop-apiリポジトリの ops/server-change-notices/20261005-COOPAPI-007-summary.md（本番反映済み・VPS管理が確認）
 
@@ -46,11 +46,22 @@ COOPの注文の日付を、メール受信日から、注文確認メール本�
 
 ## 配信後の記録
 
-（配信後に、update group ID・配信時刻・端末確認結果を追記する）
+配信日: 2026-10-05 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `cbdac7f` は実remote mainと一致し、`197de82..cbdac7f` のops以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| android-internal | `e422917f-3f18-4e54-8813-62281a793e45` | `exposdk:57.0.0` | android, ios |
+| default | `e32d0d62-1e7c-405a-b0ed-beeb6e951258` | `exposdk:57.0.0` | android, ios |
+
+- Androidのupdate ID: android-internal `01a10a39-77ad-7f1b-b48b-1023d0299958` / default `01a10a3a-1bde-735b-99b9-0558e5a83307`。iOSのupdate ID: android-internal `01a10a39-77ad-7bb9-8652-28cb0d8e7bfa` / default `01a10a3a-1bde-7d87-accb-4863e0b6cbd1`。
+- EAS environment: `preview`。`--non-interactive`。どちらもexit 0。
+- **端末確認: 未実施**。確認する項目: ①アプリを完全に閉じて開き直し、新しいbundleが適用されること、②COOPタブの注文情報が「お届け予定日: M/D(曜)」と表示され、日付が注文確認メールの「翌週商品配達予定日」と一致すること、③同じ行に「合計 N円（税込）」が表示され、金額がメールの合計金額（税込）と一致すること、④「過去の注文」の各カードにも、同じ見出しの日付と金額が出ること（商品一覧も開けること）、⑤サーバーが反映済みなので、見出しが「注文日」のままになっていないこと（「注文日」のままなら、最新注文が旧形式のままで、サーバー側の手動取得が反映されていない）。
+- Expo Go（iOS）は `default`、Android実機は `android-internal` を読む。新しいbundleに切り替わるのは次回起動以降。
+- 結果: 「アプリ側の配信は完了／端末確認は未実施」。
 
 ## 承認と状態
 
 - app owner: 2026-10-05に配信を明示承認。
 - VPS management review: クライアントのみの変更で、サーバー変更通知は不要（サーバー側は通知007として別管理・本番反映済み）。
 - VPS production approval: 該当する操作なし。
-- client distribution: approved（配信前）。
+- client distribution: published（2026-10-05、EAS Update両channel。端末確認は未実施）。
