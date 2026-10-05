@@ -93,7 +93,8 @@ meal-planner-app/
 │   └── utils/                   ← 日付処理・ローカルキャッシュ等
 ├── docs/
 │   ├── API_SPEC.md              ← COOP連携API仕様書
-│   └── MOCK_IMPLEMENTATIONS.md ← 仮実装の現状と残存サンプル
+│   ├── MOCK_IMPLEMENTATIONS.md ← 仮実装の現状と残存サンプル
+│   └── RELEASE_AND_DEPLOY.md   ← リリース・デプロイ手順（EAS Update、サーバーの変更通知書、Codexへの依頼）
 └── package.json
 ```
 
@@ -112,3 +113,4 @@ meal-planner-app/
 
 - COOPのAPI設定は `src/config/coopConfig.ts` を経由する。お知らせ取得は `src/api/notices.ts` に分かれる。
 - ソース上の実装状況は `docs/MOCK_IMPLEMENTATIONS.md`、COOP APIの入出力は `docs/API_SPEC.md` を参照する。
+- アプリの配信（EAS Update）・サーバーのリリース（変更通知書）・Codexへの作業依頼の手順は `docs/RELEASE_AND_DEPLOY.md` を参照する。
