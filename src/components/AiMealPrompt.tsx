@@ -1,23 +1,39 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Dispatch, SetStateAction, useEffect, useMemo, useRef } from "react";
 import { Alert, Keyboard, ScrollView, Share, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { formatDate, genId, getDateKey } from "../utils/helpers";
 import { buildAiMealPrompt, parseAiMealPlan, ParsedMeal } from "../utils/aiMealPlan";
 import { Menus, Recipe, MenuItem } from "../types";
+import { AiMealDraft, resetAiMealDraft } from "../utils/aiMealDraft";
 
-type Props = { selectedNames: string[]; menus: Menus; recipes: Recipe[]; saveRecipesWithMenus: (recipes: Recipe[], menuUpdates: Record<string, MenuItem[]>) => void; onBack: () => void };
-export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMenus, onBack }: Props) {
-  const [ingredients, setIngredients] = useState(selectedNames);
-  const [otherIngredients, setOtherIngredients] = useState("");
-  const [startOffset, setStartOffset] = useState(0);
-  const [days, setDays] = useState(3);
-  const [people, setPeople] = useState(2);
-  const [notes, setNotes] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [preview, setPreview] = useState<ParsedMeal[] | null>(null);
-  const [unreadable, setUnreadable] = useState<string[]>([]);
-  const [notice, setNotice] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+type Props = { draft: AiMealDraft; setDraft: Dispatch<SetStateAction<AiMealDraft>>; selectedNames: string[]; menus: Menus; recipes: Recipe[]; saveRecipesWithMenus: (recipes: Recipe[], menuUpdates: Record<string, MenuItem[]>) => void; onBack: () => void };
+export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, saveRecipesWithMenus, onBack }: Props) {
+  const updateField = <K extends keyof AiMealDraft>(key: K, value: SetStateAction<AiMealDraft[K]>): void => {
+    setDraft(current => ({ ...current, [key]: typeof value === "function" ? (value as (previous: AiMealDraft[K]) => AiMealDraft[K])(current[key]) : value }));
+  };
+  const ingredients = draft.ingredients;
+  const otherIngredients = draft.otherIngredients;
+  const startOffset = draft.startOffset;
+  const days = draft.days;
+  const people = draft.people;
+  const notes = draft.notes;
+  const prompt = draft.prompt;
+  const answer = draft.answer;
+  const preview = draft.preview;
+  const unreadable = draft.unreadable;
+  const notice = draft.notice;
+  const expanded = draft.expanded;
+  const setIngredients = (value: SetStateAction<string[]>) => updateField("ingredients", value);
+  const setOtherIngredients = (value: SetStateAction<string>) => updateField("otherIngredients", value);
+  const setStartOffset = (value: SetStateAction<number>) => updateField("startOffset", value);
+  const setDays = (value: SetStateAction<number>) => updateField("days", value);
+  const setPeople = (value: SetStateAction<number>) => updateField("people", value);
+  const setNotes = (value: SetStateAction<string>) => updateField("notes", value);
+  const setPrompt = (value: SetStateAction<string>) => updateField("prompt", value);
+  const setAnswer = (value: SetStateAction<string>) => updateField("answer", value);
+  const setPreview = (value: SetStateAction<ParsedMeal[] | null>) => updateField("preview", value);
+  const setUnreadable = (value: SetStateAction<string[]>) => updateField("unreadable", value);
+  const setNotice = (value: SetStateAction<string>) => updateField("notice", value);
+  const setExpanded = (value: SetStateAction<Set<string>>) => updateField("expanded", value);
   const scrollRef = useRef<ScrollView>(null);
   const previewY = useRef(0);
   // 読み取った後、プレビューの位置まで画面を送る（貼り付け欄が長くても、結果を探さなくてよいように）
@@ -33,6 +49,10 @@ export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMen
   const button = (label: string, onPress: () => void, color = "#d4725c") => <TouchableOpacity onPress={onPress} style={{ padding: 11, alignItems: "center", backgroundColor: color, borderRadius: 9, marginTop: 10 }}><Text style={{ color: "white", fontWeight: "700" }}>{label}</Text></TouchableOpacity>;
   const readAnswer = () => { Keyboard.dismiss(); const result = parseAiMealPlan(answer, startDate); setPreview(result.meals); setUnreadable(result.unreadableLines); setNotice(""); };
   const clearAnswer = () => { setAnswer(""); setPreview(null); setUnreadable([]); setExpanded(new Set()); };
+  const resetDraft = () => Alert.alert("入力をリセット", "入力内容をすべてリセットしますか？", [
+    { text: "キャンセル", style: "cancel" },
+    { text: "リセットする", style: "destructive", onPress: () => setDraft(resetAiMealDraft(selectedNames)) },
+  ]);
   const apply = () => {
     // 料理のない日付（回答が途中で切れた等）は反映しない。空で置き換えると、その日の献立が消えるため。
     const days = (preview ?? []).filter(day => day.dishes.length > 0);
@@ -55,12 +75,12 @@ export function AiMealPrompt({ selectedNames, menus, recipes, saveRecipesWithMen
       });
     });
     saveRecipesWithMenus([...created.values()], menuUpdates);
-    setNotice(`${days.length}日分の献立を反映しました`); setPreview(null);
+    setNotice(`${days.length}日分の献立を反映しました`); setAnswer(""); setPreview(null); setUnreadable([]); setExpanded(new Set());
   };
   return <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 }}><TouchableOpacity onPress={onBack} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 8 }}><Text style={{ color: "#a08979" }}>← 戻る</Text></TouchableOpacity><Text style={{ fontSize: 17, fontWeight: "700", color: "#4a3f36" }}>🤖 AIに献立を相談</Text></View>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 }}><TouchableOpacity onPress={onBack} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 8 }}><Text style={{ color: "#a08979" }}>← 戻る</Text></TouchableOpacity><Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#4a3f36" }}>🤖 AIに献立を相談</Text><TouchableOpacity onPress={resetDraft} style={{ paddingVertical: 6, paddingHorizontal: 8, backgroundColor: "#f5ebe2", borderRadius: 7 }}><Text style={{ color: "#8a7e72", fontSize: 11, fontWeight: "600" }}>入力をリセット</Text></TouchableOpacity></View>
     {notice ? <Text style={{ padding: 10, color: "#397044", backgroundColor: "#edf7ec", borderRadius: 8 }}>{notice}</Text> : null}
-    <Text style={label}>使う食材</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>{ingredients.map((name, i) => <TouchableOpacity key={`${name}-${i}`} onPress={() => setIngredients(current => current.filter((_, index) => index !== i))} style={chip}><Text style={{ color: "#6a5d50" }}>{name} ×</Text></TouchableOpacity>)}</View>
+    <Text style={label}>使う食材</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>{ingredients.map((name, i) => <TouchableOpacity key={`${name}-${i}`} onPress={() => { setIngredients(current => current.filter((_, index) => index !== i)); updateField("removedIngredients", current => current.includes(name) ? current : [...current, name]); }} style={chip}><Text style={{ color: "#6a5d50" }}>{name} ×</Text></TouchableOpacity>)}</View>
     <Text style={label}>ほかに使いたい食材（任意）</Text><TextInput value={otherIngredients} onChangeText={setOtherIngredients} multiline placeholder="食材を改行・読点・カンマで区切って入力" style={input} />
     <Text style={label}>期間</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>{[0, 1].map(offset => <TouchableOpacity key={offset} onPress={() => setStartOffset(offset)} style={[chip, { backgroundColor: startOffset === offset ? "#d4725c" : "#f5ebe2" }]}><Text style={{ color: startOffset === offset ? "white" : "#6a5d50" }}>{offset ? "明日" : "今日"}</Text></TouchableOpacity>)}</View>
     {counter("日数", days, 1, 7, setDays)}{counter("人数", people, 1, 8, setPeople)}

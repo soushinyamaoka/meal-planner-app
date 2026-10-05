@@ -8,6 +8,7 @@ import { Recipe, Menus, MenuItem, CoopData, CoopCategoryKey, SuggestResult, Sugg
 import { s } from "../styles/appStyles";
 import { CoopOrderHistory } from "../components/CoopOrderHistory";
 import { AiMealPrompt } from "../components/AiMealPrompt";
+import { AiMealDraft, createAiMealDraft, mergeSelectedIntoChips } from "../utils/aiMealDraft";
 
 // ═══════════════════════════════════════════
 // COOP Tab
@@ -27,6 +28,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedCat, setExpandedCat] = useState<Set<string>>(new Set(["ingredients", "kits"]));
   const [view, setView] = useState<"list" | "loading" | "suggestResult" | "planResult" | "history" | "aiPrompt">("list");
+  const [aiMealDraft, setAiMealDraft] = useState<AiMealDraft>(() => createAiMealDraft());
   const [suggestResult, setSuggestResult] = useState<SuggestResult | null>(null);
   const [planResult, setPlanResult] = useState<PlanResult | null>(null);
   const [savedFlags, setSavedFlags] = useState<Record<string, boolean>>({});
@@ -180,12 +182,12 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
   };
 
   if (view === "history") return <CoopOrderHistory onBack={() => setView("list")} />;
-  if (view === "aiPrompt") return <AiMealPrompt selectedNames={getSelectedNames()} menus={menus} recipes={recipes} saveRecipesWithMenus={saveRecipesWithMenus} onBack={() => setView("list")} />;
+  if (view === "aiPrompt") return <AiMealPrompt draft={aiMealDraft} setDraft={setAiMealDraft} selectedNames={getSelectedNames()} menus={menus} recipes={recipes} saveRecipesWithMenus={saveRecipesWithMenus} onBack={() => setView("list")} />;
 
   const shortcutButtons = (
     <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, alignSelf: "stretch" }}>
       <TouchableOpacity onPress={() => setView("history")} style={{ flex: 1, padding: 11, backgroundColor: "#f5ebe2", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#6a5d50", fontWeight: "700", fontSize: 12 }}>🕘 過去の注文</Text></TouchableOpacity>
-      <TouchableOpacity onPress={() => setView("aiPrompt")} style={{ flex: 1, padding: 11, backgroundColor: "#d4725c", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>🤖 AIに献立を相談</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => { const names = getSelectedNames(); setAiMealDraft(current => ({ ...current, ingredients: mergeSelectedIntoChips(current.ingredients, current.removedIngredients, names) })); setView("aiPrompt"); }} style={{ flex: 1, padding: 11, backgroundColor: "#d4725c", borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>🤖 AIに献立を相談</Text></TouchableOpacity>
     </View>
   );
 
