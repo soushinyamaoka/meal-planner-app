@@ -1,4 +1,4 @@
-export type ParsedDish = { name: string; ingredients: string[]; steps: string[] };
+export type ParsedDish = { name: string; ingredients: string[]; steps: string[]; role?: "主菜" | "副菜" | "汁物" };
 export type ParsedMeal = { date: Date; dateKey: string; dishes: ParsedDish[] };
 export type ParseMealPlanResult = { meals: ParsedMeal[]; unreadableLines: string[] };
 
@@ -65,11 +65,14 @@ export function parseAiMealPlan(text: string, startDate: Date): ParseMealPlanRes
     const meal = currentMeal;
     const dishMatch = line.match(/^[■□●◆]\s*(.+)$/);
     if (dishMatch) {
-      if (!meal) { unreadableLines.push(raw); continue; }
-      const name = dishMatch[1].trim().replace(/\s*[（(](?:\d+\s*人(?:分|前)?)[）)]\s*$/, "").trim();
-      if (!name) { unreadableLines.push(raw); continue; }
-      meal.dishes.push({ name, ingredients: [], steps: [] });
       activeDish = null; currentKind = null;
+      if (!meal) { unreadableLines.push(raw); continue; }
+      const body = dishMatch[1].trim();
+      const roleMatch = body.match(/^(主菜|副菜|汁物)\s*[:：]\s*/);
+      const role = roleMatch?.[1] as ParsedDish["role"];
+      const name = body.replace(/^(主菜|副菜|汁物)\s*[:：]\s*/, "").replace(/\s*[（(](?:\d+\s*人(?:分|前)?)[）)]\s*$/, "").trim();
+      if (!name) { unreadableLines.push(raw); continue; }
+      meal.dishes.push({ name, ingredients: [], steps: [], ...(role ? { role } : {}) });
       continue;
     }
     const sectionMatch = line.match(/^[【\[]?\s*(材料|作り方|手順)\s*[】\]]?\s*(?:[（(][^）)]*[）)])?\s*[:：]?\s*(.*)$/);
@@ -105,6 +108,6 @@ export function buildAiMealPrompt(options: { startDate: Date; days: number; peop
     const date = new Date(options.startDate); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() + i);
     return `${date.getMonth() + 1}/${date.getDate()}`;
   });
-  const example = `${dates[0]}\n■ 料理1\n材料:\n- 食材 分量\n作り方:\n1. 手順\n■ 料理2\n材料:\n- 食材 分量\n作り方:\n1. 手順`;
-  return `家庭で作りやすい夕食の献立を考えてください。指定食材をなるべく使い切ってください。\n\n期間（1日1食・夕食）: ${dates.join("、")}\n人数: ${options.people}人\n使う食材: ${options.ingredients.length ? options.ingredients.join("、") : "指定なし"}\n補足: ${options.notes.trim() || "なし"}\n材料は${options.people}人分の分量で書いてください。\n\n回答は次の形式だけにしてください。この形式以外の前置き・説明・まとめは書かないでください。各日付について必ず書いてください。日付の行には日付だけを書いてください。料理名の行は ■ で始め、料理名だけを書いてください。材料は1行に1つ、作り方は番号付きで1行に1手順を書いてください。\n${example}`;
+  const example = `${dates[0]}\n■ 主菜：料理名1\n材料:\n- 食材 分量\n作り方:\n1. 手順\n■ 副菜：料理名2\n材料:\n- 食材 分量\n作り方:\n1. 手順\n■ 汁物：料理名3\n材料:\n- 食材 分量\n作り方:\n1. 手順`;
+  return `家庭で作りやすい夕食の献立を考えてください。指定食材をなるべく使い切ってください。\n\n期間（1日1食・夕食）: ${dates.join("、")}\n人数: ${options.people}人\n使う食材: ${options.ingredients.length ? options.ingredients.join("、") : "指定なし"}\n補足: ${options.notes.trim() || "なし"}\n材料は${options.people}人分の分量で書いてください。\n1日につき、主菜・副菜・汁物の3品（3レシピ）を、この順で考えてください。各日に主菜・副菜・汁物を1品ずつ必ず含めてください。\n\n回答は次の形式だけにしてください。この形式以外の前置き・説明・まとめは書かないでください。各日付について必ず書いてください。日付の行には日付だけを書いてください。料理の行は「■ 主菜：料理名」「■ 副菜：料理名」「■ 汁物：料理名」の形にし、役割ラベルの後ろには料理名だけを書いてください。材料は1行に1つ、作り方は番号付きで1行に1手順を書いてください。\n${example}`;
 }

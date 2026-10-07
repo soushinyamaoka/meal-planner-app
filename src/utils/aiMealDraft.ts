@@ -14,6 +14,9 @@ export type AiMealDraft = {
   unreadable: string[];
   notice: string;
   expanded: Set<string>;
+  selectedDishKeys: string[];
+  addedDishKeys: string[];
+  createdRecipeIds: Record<string, string>;
 };
 
 export const createAiMealDraft = (selectedNames: string[] = []): AiMealDraft => ({
@@ -30,6 +33,9 @@ export const createAiMealDraft = (selectedNames: string[] = []): AiMealDraft => 
   unreadable: [],
   notice: "",
   expanded: new Set(),
+  selectedDishKeys: [],
+  addedDishKeys: [],
+  createdRecipeIds: {},
 });
 
 export const mergeSelectedIntoChips = (chips: string[], removed: string[], selected: string[]): string[] => {
