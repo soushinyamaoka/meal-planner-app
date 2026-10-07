@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261007-MEALPLANNER-002
 app: meal-planner-app
-status: ready
+status: delivered
 source_commit: aec5523cf8b7952e36a6e0fbd19c9dacc2674092
-distribution_status: approved
+distribution_status: published
 release_gate: user_approved
 server_change_notice: なし（本releaseはクライアントのみ。サーバー・APIの変更はない）
 
@@ -45,11 +45,23 @@ server_change_notice: なし（本releaseはクライアントのみ。サーバ
 
 ## 配信後の記録
 
-（配信後に、update group ID・配信時刻・端末確認結果を追記する）
+配信日: 2026-10-07 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `e28ddae` は実remote mainと一致し、`aec5523..e28ddae` のops・docs以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| android-internal | `628364d6-92f3-4075-a291-1c514f74cb62` | `exposdk:57.0.0` | android, ios |
+| default | `c79f07b9-afe2-4e98-8a0e-12effa3e078b` | `exposdk:57.0.0` | android, ios |
+
+- Androidのupdate ID: android-internal `01a1145e-5982-72fe-93e0-6d6c2d011a11` / default `01a1145f-1081-70b5-b96c-f92d2eced44a`。iOSのupdate ID: android-internal `01a1145e-5982-71cd-836c-589a838d227b` / default `01a1145f-1081-75eb-ac54-5956ae3db14d`。
+- EAS environment: `preview`。`--non-interactive`。どちらもexit 0。
+- **端末確認: 未実施**。確認する項目: ①アプリを完全に閉じて開き直し、新しいbundleが適用されること、②COOPタブ →「AIに献立を相談」で、「AIの回答を貼り付け」欄をタップすると、キーボードが開いた後、欄が画面の上端付近までスクロールし、入力欄がキーボードに隠れないこと。貼り付け・追記ができること、③「補足」「ほかに使いたい食材」の欄でも同様であること、④ある欄を入力中に、別の欄をタップしても、その欄が見えること、⑤キーボードを閉じると、下に足した余白が消えて、画面が元の長さに戻ること、⑥長い回答を貼り付けた状態で、末尾に追記できること、⑦「読み取る」を押すと、キーボードが閉じて、プレビューの位置まで画面が送られること、⑧一覧へ戻っても入力が残ること（前回までの動作が変わっていないこと）。
+- 動作が不十分な場合の情報として、確認時に、使った端末（Android/iOS）とキーボードの種類を控える。
+- Expo Go（iOS）は `default`、Android実機は `android-internal` を読む。新しいbundleに切り替わるのは次回起動以降。
+- 結果: 「アプリ側の配信は完了／端末確認は未実施」。
 
 ## 承認と状態
 
 - app owner: 2026-10-07に配信を明示承認。
 - VPS management review: クライアントのみの変更で、サーバー変更通知は不要。
 - VPS production approval: 該当する操作なし。
-- client distribution: approved（配信前）。
+- client distribution: published（2026-10-07、EAS Update両channel。端末確認は未実施）。
