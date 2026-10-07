@@ -1,5 +1,6 @@
 import React, { Dispatch, SetStateAction, useEffect, useMemo, useRef } from "react";
 import { Alert, Keyboard, ScrollView, Share, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { formatDate, genId, getDateKey } from "../utils/helpers";
 import { buildAiMealPrompt, parseAiMealPlan, ParsedMeal } from "../utils/aiMealPlan";
 import { Menus, Recipe, MenuItem } from "../types";
@@ -34,7 +35,7 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
   const setUnreadable = (value: SetStateAction<string[]>) => updateField("unreadable", value);
   const setNotice = (value: SetStateAction<string>) => updateField("notice", value);
   const setExpanded = (value: SetStateAction<Set<string>>) => updateField("expanded", value);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
   const previewY = useRef(0);
   // 読み取った後、プレビューの位置まで画面を送る（貼り付け欄が長くても、結果を探さなくてよいように）
   useEffect(() => {
@@ -77,7 +78,9 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
     saveRecipesWithMenus([...created.values()], menuUpdates);
     setNotice(`${days.length}日分の献立を反映しました`); setAnswer(""); setPreview(null); setUnreadable([]); setExpanded(new Set());
   };
-  return <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
+  // キーボードが開いたとき、タップした入力欄（貼り付け欄など）が隠れないよう、他の入力画面と同じ
+  // KeyboardAwareScrollView を使う。innerRef は、読み取り後にプレビューへ画面を送る scrollTo のために受け取る。
+  return <KeyboardAwareScrollView innerRef={(ref: unknown) => { scrollRef.current = ref as ScrollView | null; }} enableOnAndroid extraScrollHeight={16} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 }}><TouchableOpacity onPress={onBack} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 8 }}><Text style={{ color: "#a08979" }}>← 戻る</Text></TouchableOpacity><Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#4a3f36" }}>🤖 AIに献立を相談</Text><TouchableOpacity onPress={resetDraft} style={{ paddingVertical: 6, paddingHorizontal: 8, backgroundColor: "#f5ebe2", borderRadius: 7 }}><Text style={{ color: "#8a7e72", fontSize: 11, fontWeight: "600" }}>入力をリセット</Text></TouchableOpacity></View>
     {notice ? <Text style={{ padding: 10, color: "#397044", backgroundColor: "#edf7ec", borderRadius: 8 }}>{notice}</Text> : null}
     <Text style={label}>使う食材</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>{ingredients.map((name, i) => <TouchableOpacity key={`${name}-${i}`} onPress={() => { setIngredients(current => current.filter((_, index) => index !== i)); updateField("removedIngredients", current => current.includes(name) ? current : [...current, name]); }} style={chip}><Text style={{ color: "#6a5d50" }}>{name} ×</Text></TouchableOpacity>)}</View>
@@ -116,7 +119,7 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
       {unreadable.length > 0 && <View><Text style={{ fontWeight: "700", color: "#8a7e72" }}>読み取れなかった行（{unreadable.length}行）</Text>{unreadable.slice(0, 8).map((line, i) => <Text key={i} style={{ color: "#8a7e72" }}>{line || "（空行）"}</Text>)}{unreadable.length > 8 && <Text style={{ color: "#a09585", fontSize: 12 }}>ほか{unreadable.length - 8}行</Text>}</View>}
       {preview.some(day => day.dishes.length > 0) && button("献立に反映", apply)}
     </View>}
-  </ScrollView>;
+  </KeyboardAwareScrollView>;
 }
 
 const label = { marginTop: 14, marginBottom: 6, color: "#8a7e72", fontWeight: "600" as const, fontSize: 12 };
