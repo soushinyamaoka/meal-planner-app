@@ -1,6 +1,5 @@
-import React, { Dispatch, SetStateAction, useEffect, useMemo, useRef } from "react";
+import React, { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Keyboard, ScrollView, Share, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { formatDate, genId, getDateKey } from "../utils/helpers";
 import { buildAiMealPrompt, parseAiMealPlan, ParsedMeal } from "../utils/aiMealPlan";
 import { Menus, Recipe, MenuItem } from "../types";
@@ -37,6 +36,45 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
   const setExpanded = (value: SetStateAction<Set<string>>) => updateField("expanded", value);
   const scrollRef = useRef<ScrollView | null>(null);
   const previewY = useRef(0);
+
+  // キーボードで入力欄が隠れないようにする。
+  // Expo SDK 57 のAndroidはエッジ・トゥ・エッジ表示で、キーボードが開いても画面が縮まず、システムも入力欄を動かさない
+  // （KeyboardAwareScrollView はシステムが動かす前提のため、Androidではほとんど動かなかった）。
+  // そこで、キーボードの高さの余白を画面の下に足し、タップした入力欄が画面の上端に来るよう、こちらでスクロールする。
+  type FieldKey = "other" | "notes" | "answer";
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardHeightRef = useRef(0);
+  const fieldY = useRef<Partial<Record<FieldKey, number>>>({});
+  const focusedField = useRef<FieldKey | null>(null);
+  const scrollToField = (key: FieldKey): void => {
+    const y = fieldY.current[key];
+    if (y === undefined) return;
+    // 欄の見出し（ラベル）も見えるよう、少し上から表示する
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 36), animated: true });
+  };
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", e => {
+      keyboardHeightRef.current = e.endCoordinates.height;
+      setKeyboardHeight(e.endCoordinates.height);
+      // 余白が描画されてから動かす（描画前だと、下の欄まで動かせない）
+      const key = focusedField.current;
+      if (key) setTimeout(() => scrollToField(key), 100);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardHeightRef.current = 0;
+      setKeyboardHeight(0);
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  const fieldProps = (key: FieldKey) => ({
+    onLayout: (e: { nativeEvent: { layout: { y: number } } }) => { fieldY.current[key] = e.nativeEvent.layout.y; },
+    onFocus: () => {
+      focusedField.current = key;
+      // すでにキーボードが開いている（別の欄から移った）場合は、すぐに動かす
+      if (keyboardHeightRef.current > 0) scrollToField(key);
+    },
+    onBlur: () => { if (focusedField.current === key) focusedField.current = null; },
+  });
   // 読み取った後、プレビューの位置まで画面を送る（貼り付け欄が長くても、結果を探さなくてよいように）
   useEffect(() => {
     if (!preview) return;
@@ -78,19 +116,17 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
     saveRecipesWithMenus([...created.values()], menuUpdates);
     setNotice(`${days.length}日分の献立を反映しました`); setAnswer(""); setPreview(null); setUnreadable([]); setExpanded(new Set());
   };
-  // キーボードが開いたとき、タップした入力欄（貼り付け欄など）が隠れないよう、他の入力画面と同じ
-  // KeyboardAwareScrollView を使う。innerRef は、読み取り後にプレビューへ画面を送る scrollTo のために受け取る。
-  return <KeyboardAwareScrollView innerRef={(ref: unknown) => { scrollRef.current = ref as ScrollView | null; }} enableOnAndroid extraScrollHeight={16} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
+  return <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 35 }}>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 }}><TouchableOpacity onPress={onBack} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 8 }}><Text style={{ color: "#a08979" }}>← 戻る</Text></TouchableOpacity><Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#4a3f36" }}>🤖 AIに献立を相談</Text><TouchableOpacity onPress={resetDraft} style={{ paddingVertical: 6, paddingHorizontal: 8, backgroundColor: "#f5ebe2", borderRadius: 7 }}><Text style={{ color: "#8a7e72", fontSize: 11, fontWeight: "600" }}>入力をリセット</Text></TouchableOpacity></View>
     {notice ? <Text style={{ padding: 10, color: "#397044", backgroundColor: "#edf7ec", borderRadius: 8 }}>{notice}</Text> : null}
     <Text style={label}>使う食材</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>{ingredients.map((name, i) => <TouchableOpacity key={`${name}-${i}`} onPress={() => { setIngredients(current => current.filter((_, index) => index !== i)); updateField("removedIngredients", current => current.includes(name) ? current : [...current, name]); }} style={chip}><Text style={{ color: "#6a5d50" }}>{name} ×</Text></TouchableOpacity>)}</View>
-    <Text style={label}>ほかに使いたい食材（任意）</Text><TextInput value={otherIngredients} onChangeText={setOtherIngredients} multiline placeholder="食材を改行・読点・カンマで区切って入力" style={input} />
+    <Text style={label}>ほかに使いたい食材（任意）</Text><TextInput {...fieldProps("other")} value={otherIngredients} onChangeText={setOtherIngredients} multiline placeholder="食材を改行・読点・カンマで区切って入力" style={input} />
     <Text style={label}>期間</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>{[0, 1].map(offset => <TouchableOpacity key={offset} onPress={() => setStartOffset(offset)} style={[chip, { backgroundColor: startOffset === offset ? "#d4725c" : "#f5ebe2" }]}><Text style={{ color: startOffset === offset ? "white" : "#6a5d50" }}>{offset ? "明日" : "今日"}</Text></TouchableOpacity>)}</View>
     {counter("日数", days, 1, 7, setDays)}{counter("人数", people, 1, 8, setPeople)}
-    <Text style={label}>補足（任意）</Text><TextInput value={notes} onChangeText={setNotes} multiline placeholder="好み・苦手・アレルギーなど" style={input} />
+    <Text style={label}>補足（任意）</Text><TextInput {...fieldProps("notes")} value={notes} onChangeText={setNotes} multiline placeholder="好み・苦手・アレルギーなど" style={input} />
     {button("プロンプトを作成", () => setPrompt(buildAiMealPrompt({ startDate, days, people, ingredients: allIngredients, notes })))}
     {prompt ? <><Text selectable style={[input, { marginTop: 10, lineHeight: 21 }]}>{prompt}</Text>{button("共有・コピー", () => { void Share.share({ message: prompt }).catch(() => Alert.alert("共有できませんでした")); }, "#8a7e72")}</> : null}
-    <Text style={label}>AIの回答を貼り付け</Text><TextInput value={answer} onChangeText={setAnswer} multiline scrollEnabled placeholder="例: 10/5の下に■料理名・材料・作り方を記載" style={[input, { minHeight: 100, maxHeight: 170, textAlignVertical: "top" }]} />
+    <Text style={label}>AIの回答を貼り付け</Text><TextInput {...fieldProps("answer")} value={answer} onChangeText={setAnswer} multiline scrollEnabled placeholder="例: 10/5の下に■料理名・材料・作り方を記載" style={[input, { minHeight: 100, maxHeight: 170, textAlignVertical: "top" }]} />
     <View style={{ flexDirection: "row", gap: 8 }}>
       <TouchableOpacity onPress={readAnswer} style={{ flex: 3, padding: 12, alignItems: "center", backgroundColor: "#d4725c", borderRadius: 9, marginTop: 10 }}><Text style={{ color: "white", fontWeight: "700" }}>読み取る</Text></TouchableOpacity>
       <TouchableOpacity onPress={clearAnswer} disabled={!answer && !preview} style={{ flex: 1, padding: 12, alignItems: "center", backgroundColor: "#8a7e72", borderRadius: 9, marginTop: 10, opacity: !answer && !preview ? 0.4 : 1 }}><Text style={{ color: "white", fontWeight: "700" }}>クリア</Text></TouchableOpacity>
@@ -119,7 +155,9 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
       {unreadable.length > 0 && <View><Text style={{ fontWeight: "700", color: "#8a7e72" }}>読み取れなかった行（{unreadable.length}行）</Text>{unreadable.slice(0, 8).map((line, i) => <Text key={i} style={{ color: "#8a7e72" }}>{line || "（空行）"}</Text>)}{unreadable.length > 8 && <Text style={{ color: "#a09585", fontSize: 12 }}>ほか{unreadable.length - 8}行</Text>}</View>}
       {preview.some(day => day.dishes.length > 0) && button("献立に反映", apply)}
     </View>}
-  </KeyboardAwareScrollView>;
+    {/* キーボードが開いている間だけ、その高さの余白を足す（下の入力欄も、キーボードの上まで動かせるように） */}
+    {keyboardHeight > 0 && <View style={{ height: keyboardHeight }} />}
+  </ScrollView>;
 }
 
 const label = { marginTop: 14, marginBottom: 6, color: "#8a7e72", fontWeight: "600" as const, fontSize: 12 };
