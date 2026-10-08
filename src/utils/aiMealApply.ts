@@ -3,6 +3,20 @@ import { ParsedMeal } from "./aiMealPlan";
 
 export const getAiDishKey = (dateKey: string, index: number): string => `${dateKey}#${index + 1}`;
 
+// 材料も作り方も無い料理（「味噌汁」「牛丼」のように、レシピにするほどではない料理を名前だけ書いたもの）。
+// 片方だけ欠けている料理は、AIの回答が途中で切れた可能性があるため含めない。
+export const isNameOnlyDish = (dish: ParsedMeal["dishes"][number]): boolean =>
+  dish.ingredients.length === 0 && dish.steps.length === 0;
+
+// 読み取った直後に選択済みにする料理。料理名だけの料理は、貼り付けてそのまま追加できるよう最初から選ぶ。
+// AIのレシピ候補（材料・作り方つき）は、気に入ったものだけを選ぶ使い方のため、選ばない。
+export const getDefaultSelectedDishKeys = (meals: ParsedMeal[]): string[] =>
+  meals.flatMap(meal => meal.dishes.flatMap((dish, index) => (isNameOnlyDish(dish) ? [getAiDishKey(meal.dateKey, index)] : [])));
+
+// 画面全体の「全部選ぶ」で選ぶ料理（追加済みは除く）。
+export const getAllSelectableDishKeys = (meals: ParsedMeal[], addedDishKeys: string[]): string[] =>
+  meals.flatMap(meal => meal.dishes.map((_, index) => getAiDishKey(meal.dateKey, index))).filter(key => !addedDishKeys.includes(key));
+
 export function buildAiMealAppend(options: {
   meals: ParsedMeal[];
   selectedDishKeys: string[];

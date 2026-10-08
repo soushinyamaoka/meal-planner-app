@@ -4,7 +4,7 @@ import { formatDate, genId, getDateKey } from "../utils/helpers";
 import { buildAiMealPrompt, parseAiMealPlan, ParsedMeal } from "../utils/aiMealPlan";
 import { Menus, Recipe, MenuItem } from "../types";
 import { AiMealDraft, resetAiMealDraft } from "../utils/aiMealDraft";
-import { buildAiMealAppend, getAiDishKey } from "../utils/aiMealApply";
+import { buildAiMealAppend, getAiDishKey, getAllSelectableDishKeys, getDefaultSelectedDishKeys, isNameOnlyDish } from "../utils/aiMealApply";
 
 type Props = { draft: AiMealDraft; setDraft: Dispatch<SetStateAction<AiMealDraft>>; selectedNames: string[]; menus: Menus; recipes: Recipe[]; saveRecipesWithMenus: (recipes: Recipe[], menuUpdates: Record<string, MenuItem[]>) => void; onBack: () => void };
 export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, saveRecipesWithMenus, onBack }: Props) {
@@ -87,7 +87,7 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
   const adjust = (value: number, delta: number, min: number, max: number, setter: (v: number) => void) => setter(Math.max(min, Math.min(max, value + delta)));
   const counter = (label: string, value: number, min: number, max: number, setter: (v: number) => void) => <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 10 }}><Text style={{ flex: 1, color: "#5a4a3c" }}>{label}: {value}</Text><TouchableOpacity onPress={() => adjust(value, -1, min, max, setter)} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 7 }}><Text>−</Text></TouchableOpacity><TouchableOpacity onPress={() => adjust(value, 1, min, max, setter)} style={{ padding: 8, backgroundColor: "#f5ebe2", borderRadius: 7 }}><Text>＋</Text></TouchableOpacity></View>;
   const button = (label: string, onPress: () => void, color = "#d4725c", disabled = false) => <TouchableOpacity onPress={onPress} disabled={disabled} style={{ padding: 11, alignItems: "center", backgroundColor: color, borderRadius: 9, marginTop: 10, opacity: disabled ? 0.5 : 1 }}><Text style={{ color: "white", fontWeight: "700" }}>{label}</Text></TouchableOpacity>;
-  const readAnswer = () => { Keyboard.dismiss(); const result = parseAiMealPlan(answer, startDate); setPreview(result.meals); setUnreadable(result.unreadableLines); updateField("selectedDishKeys", []); updateField("addedDishKeys", []); updateField("createdRecipeIds", {}); setExpanded(new Set()); setNotice(""); };
+  const readAnswer = () => { Keyboard.dismiss(); const result = parseAiMealPlan(answer, startDate); setPreview(result.meals); setUnreadable(result.unreadableLines); updateField("selectedDishKeys", getDefaultSelectedDishKeys(result.meals)); updateField("addedDishKeys", []); updateField("createdRecipeIds", {}); setExpanded(new Set()); setNotice(""); };
   const clearAnswer = () => { setAnswer(""); setPreview(null); setUnreadable([]); setExpanded(new Set()); updateField("selectedDishKeys", []); updateField("addedDishKeys", []); updateField("createdRecipeIds", {}); setNotice(""); };
   const resetDraft = () => Alert.alert("入力をリセット", "入力内容をすべてリセットしますか？", [
     { text: "キャンセル", style: "cancel" },
@@ -122,6 +122,7 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
     </View>
     {preview && <View onLayout={e => { previewY.current = e.nativeEvent.layout.y; }} style={{ marginTop: 12, padding: 12, backgroundColor: "#fffcf8", borderRadius: 10 }}>
       {preview.length === 0 && <Text>読み取れる献立がありません。</Text>}
+      {preview.some(day => day.dishes.length > 0) && <View style={{ flexDirection: "row", gap: 14, marginBottom: 8 }}><TouchableOpacity onPress={() => updateField("selectedDishKeys", getAllSelectableDishKeys(preview, addedDishKeys))}><Text style={{ color: "#8a5b45", fontSize: 13, fontWeight: "600" }}>全部選ぶ</Text></TouchableOpacity><TouchableOpacity onPress={() => updateField("selectedDishKeys", [])}><Text style={{ color: "#8a5b45", fontSize: 13, fontWeight: "600" }}>全部外す</Text></TouchableOpacity></View>}
       {preview.map(day => {
         const existing = menus[day.dateKey] ?? []; const fd = formatDate(day.date);
         return <View key={day.dateKey} style={{ marginBottom: 10 }}>
@@ -135,7 +136,9 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
               {registered ? <Text style={{ color: "#587a54", fontSize: 12 }}>📖 登録済みのレシピを使います</Text> : complete ? <View>
                 <TouchableOpacity onPress={() => setExpanded(current => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })}><Text style={{ color: "#6a5d50", fontSize: 12 }}>材料{dish.ingredients.length}品・手順{dish.steps.length} {expanded.has(key) ? "▾" : "▸"}</Text></TouchableOpacity>
                 {expanded.has(key) && <View style={{ marginTop: 5 }}><Text style={{ fontWeight: "600", color: "#8a7e72" }}>材料</Text>{dish.ingredients.map((item, n) => <Text key={`i-${n}`} style={{ color: "#5a4a3c", fontSize: 12 }}>・{item}</Text>)}<Text style={{ marginTop: 4, fontWeight: "600", color: "#8a7e72" }}>作り方</Text>{dish.steps.map((item, n) => <Text key={`s-${n}`} style={{ color: "#5a4a3c", fontSize: 12 }}>{n + 1}. {item}</Text>)}</View>}
-              </View> : <Text style={{ color: "#b05d28", fontSize: 12 }}>⚠ 作り方がありません（料理名だけ追加します）</Text>}
+              </View> : isNameOnlyDish(dish)
+                ? <Text style={{ color: "#8a7e72", fontSize: 12 }}>📝 料理名だけ（レシピなし）</Text>
+                : <Text style={{ color: "#b05d28", fontSize: 12 }}>⚠ 材料か作り方が欠けています（料理名だけ追加します）</Text>}
             </View>;
           })}
           {day.dishes.length === 0
