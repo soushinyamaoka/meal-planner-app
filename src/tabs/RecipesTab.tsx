@@ -13,6 +13,8 @@ import { WebSearchRecipe } from "../components/RecipeShared";
 type RecipesTabProps = {
   recipes: Recipe[];
   setRecipes: React.Dispatch<React.SetStateAction<Recipe[]>>;
+  checkRecipeUsed: (recipe: Recipe) => Promise<boolean>;
+  removeRecipe: (recipeId: string, keepData: boolean) => void;
   onViewRecipe: (recipe: Recipe) => void;
   editingRecipe: Recipe | "new" | "websearch" | null;
   setEditingRecipe: React.Dispatch<React.SetStateAction<Recipe | "new" | "websearch" | null>>;
@@ -21,7 +23,7 @@ type RecipesTabProps = {
   setCategories: React.Dispatch<React.SetStateAction<RecipeCategory[]>>;
 };
 
-export function RecipesTab({ recipes, setRecipes, onViewRecipe, editingRecipe, setEditingRecipe, onAddToMeal, categories, setCategories }: RecipesTabProps) {
+export function RecipesTab({ recipes, setRecipes, checkRecipeUsed, removeRecipe, onViewRecipe, editingRecipe, setEditingRecipe, onAddToMeal, categories, setCategories }: RecipesTabProps) {
   const [filterCatId, setFilterCatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -62,7 +64,8 @@ export function RecipesTab({ recipes, setRecipes, onViewRecipe, editingRecipe, s
               setEditingRecipe(null);
             }}
             onCancel={() => setEditingRecipe(null)}
-            onDelete={editingRecipe !== "new" ? (id) => { setRecipes(p => p.filter(x => x.id !== id)); setEditingRecipe(null); } : null} />
+            checkUsed={editingRecipe !== "new" ? () => checkRecipeUsed(editingRecipe) : null}
+            onDelete={editingRecipe !== "new" ? (id, keepData) => { removeRecipe(id, keepData); setEditingRecipe(null); } : null} />
         </View>
       </KeyboardAwareScrollView>
     );
@@ -260,25 +263,35 @@ type RecipeFormFullProps = {
   recipe: RecipeFormData | null;
   onSave: (recipe: RecipeFormData) => void;
   onCancel: () => void;
-  onDelete: ((id: string) => void) | null;
+  onDelete: ((id: string, keepData: boolean) => void) | null;
+  checkUsed?: (() => Promise<boolean>) | null;
   categories: RecipeCategory[];
   setCategories: React.Dispatch<React.SetStateAction<RecipeCategory[]>>;
   setRecipes: React.Dispatch<React.SetStateAction<Recipe[]>>;
 };
 
-function RecipeFormFull({ recipe, onSave, onCancel, onDelete, categories, setCategories, setRecipes }: RecipeFormFullProps) {
+function RecipeFormFull({ recipe, onSave, onCancel, onDelete, checkUsed, categories, setCategories, setRecipes }: RecipeFormFullProps) {
   const [name, setName] = useState(recipe?.name || "");
   const [url, setUrl] = useState(recipe?.url || "");
   const [ingredients, setIngredients] = useState(recipe?.ingredients?.join("\n") || "");
   const [steps, setSteps] = useState(recipe?.steps?.join("\n") || "");
   const [memo, setMemo] = useState(recipe?.memo || "");
   const [selectedCatIds, setSelectedCatIds] = useState<string[]>(recipe?.categoryIds || []);
-  const [confirmDel, setConfirmDel] = useState(false);
+  // 削除の確認状態。keep: 一覧から外してデータを残す / delete: 物理削除する
+  const [confirmDel, setConfirmDel] = useState<null | "checking" | "keep" | "delete">(null);
   const [catManagerVisible, setCatManagerVisible] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractMsg, setExtractMsg] = useState<string | null>(null);
   const hasNonBlankUrl = typeof recipe?.url === "string" && recipe.url.trim().length > 0;
+
+  // URLありのレシピと、献立で使ったことがあるレシピは、データを残して一覧から外す。
+  const startDelete = async (): Promise<void> => {
+    if (hasNonBlankUrl || !checkUsed) { setConfirmDel("keep"); return; }
+    setConfirmDel("checking");
+    const used = await checkUsed();
+    setConfirmDel(current => (current === "checking" ? (used ? "keep" : "delete") : current));
+  };
 
   const handleUrlBlur = async (): Promise<void> => {
     const trimmedUrl = url.trim();
@@ -402,13 +415,17 @@ function RecipeFormFull({ recipe, onSave, onCancel, onDelete, categories, setCat
       </View>
       {onDelete && (
         <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: "#f0e5d8", paddingTop: 12 }}>
-          {!confirmDel ? (
-            <TouchableOpacity onPress={() => setConfirmDel(true)}><Text style={{ fontSize: 12, color: "#c0564e" }}>{hasNonBlankUrl ? "このレシピを一覧から外す" : "このレシピを削除"}</Text></TouchableOpacity>
+          {confirmDel === null ? (
+            <TouchableOpacity onPress={() => { void startDelete(); }}><Text style={{ fontSize: 12, color: "#c0564e" }}>{hasNonBlankUrl ? "このレシピを一覧から外す" : "このレシピを削除"}</Text></TouchableOpacity>
+          ) : confirmDel === "checking" ? (
+            <Text style={{ fontSize: 12, color: "#a08979" }}>献立で使ったことがあるか確認しています…</Text>
           ) : (
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-              <Text style={{ fontSize: 12, color: "#c0564e" }}>{hasNonBlankUrl ? "一覧から外します。レシピデータは保持されます。" : "本当に削除しますか？"}</Text>
-              <TouchableOpacity style={s.dangerBtn} onPress={() => { if (recipe?.id) { onDelete(recipe.id); } }}><Text style={s.dangerBtnText}>{hasNonBlankUrl ? "一覧から外す" : "削除する"}</Text></TouchableOpacity>
-              <TouchableOpacity style={s.closeBtn} onPress={() => setConfirmDel(false)}><Text style={s.closeBtnText}>やめる</Text></TouchableOpacity>
+              <Text style={{ flex: 1, fontSize: 12, color: "#c0564e" }}>{confirmDel === "keep"
+                ? (hasNonBlankUrl ? "一覧から外します。レシピデータは保持されます。" : "献立で使ったことがあるため、一覧から外します。レシピデータは保持されます。")
+                : "本当に削除しますか？"}</Text>
+              <TouchableOpacity style={s.dangerBtn} onPress={() => { if (recipe?.id) { onDelete(recipe.id, confirmDel === "keep"); } }}><Text style={s.dangerBtnText}>{confirmDel === "keep" ? "一覧から外す" : "削除する"}</Text></TouchableOpacity>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setConfirmDel(null)}><Text style={s.closeBtnText}>やめる</Text></TouchableOpacity>
             </View>
           )}
         </View>

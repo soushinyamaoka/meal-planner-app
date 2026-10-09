@@ -5,6 +5,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  getDocsFromServer,
   onSnapshot,
   query,
   where,
@@ -15,12 +16,9 @@ import { Recipe, Menus, RecipeCategory, MenuItem } from "../types";
 import { defaultRecipeCategories } from "../data/sampleData";
 import { ARCHIVE_DAYS, DAYS_AFTER, getDateKey } from "../utils/helpers";
 import { readLocalCache, writeLocalCacheDebounced } from "../utils/localCache";
+import { isRecipeUsedInMenus } from "../utils/recipeUsage";
 
 /** Firestoreに書き込む前に undefined のフィールドを除去する */
-function hasNonBlankUrl(recipe: Recipe): boolean {
-  return typeof recipe.url === "string" && recipe.url.trim().length > 0;
-}
-
 function stripUndefined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined)
@@ -42,18 +40,10 @@ export function useFirestore(householdId: string | null) {
   const [saveFailure, setSaveFailure] = useState<{ householdId: string } | null>(null);
   const currentHouseholdIdRef = useRef(householdId);
   currentHouseholdIdRef.current = householdId;
-  const [menusServerConfirmedFor, setMenusServerConfirmedFor] = useState<string | null>(null);
-  const [recipesServerConfirmedFor, setRecipesServerConfirmedFor] = useState<string | null>(null);
-  const menusServerConfirmedRef = useRef<string | null>(null);
-  const recipesServerConfirmedRef = useRef<string | null>(null);
 
   // ─── Firestoreリスナー ───────────────────────────────────────────────────────
   useEffect(() => {
     setSaveFailure(null);
-    menusServerConfirmedRef.current = null;
-    recipesServerConfirmedRef.current = null;
-    setMenusServerConfirmedFor(null);
-    setRecipesServerConfirmedFor(null);
 
     if (!householdId) {
       setMenusLocal({});
@@ -125,10 +115,6 @@ export function useFirestore(householdId: string | null) {
           JSON.stringify(prev) === JSON.stringify(data) ? prev : data
         );
         writeLocalCacheDebounced(householdId, "menus", data);
-        if (!snap.metadata.fromCache) {
-          menusServerConfirmedRef.current = householdId;
-          setMenusServerConfirmedFor(householdId);
-        }
         setLoadingData(false);
       },
       handleSnapshotError("menus")
@@ -145,10 +131,6 @@ export function useFirestore(householdId: string | null) {
           JSON.stringify(prev) === JSON.stringify(data) ? prev : data
         );
         writeLocalCacheDebounced(householdId, "recipes", data);
-        if (!snap.metadata.fromCache) {
-          recipesServerConfirmedRef.current = householdId;
-          setRecipesServerConfirmedFor(householdId);
-        }
         setLoadingData(false);
       },
       handleSnapshotError("recipes")
@@ -181,42 +163,7 @@ export function useFirestore(householdId: string | null) {
     };
   }, [householdId]);
 
-  // ─── 献立専用レシピの自動削除（アーカイブ期間外になったら削除） ──────────────
-  // menus/recipes が更新されるたびに評価し、対象があれば削除する。
-  // 削除後はonSnapshotでrecipesが更新され、stale条件を満たすものがなくなれば再帰せず収束する。
-  useEffect(() => {
-    if (
-      loadingData ||
-      !householdId ||
-      menusServerConfirmedRef.current !== householdId ||
-      recipesServerConfirmedRef.current !== householdId ||
-      menusServerConfirmedFor !== householdId ||
-      recipesServerConfirmedFor !== householdId
-    ) return;
-
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const archiveCutoff = new Date(today);
-    archiveCutoff.setDate(archiveCutoff.getDate() - ARCHIVE_DAYS);
-
-    const staleRecipes = recipes.filter(
-      (r) => r.showInList === false && !hasNonBlankUrl(r)
-    );
-    staleRecipes.forEach((recipe) => {
-      const refDates = Object.entries(menus)
-        .filter(([, items]) => items.some((item) => item.recipeId === recipe.id))
-        // ローカルタイムの0時として解釈し、UTC解釈による日跨ぎズレを防ぐ
-        .map(([dateKey]) => new Date(dateKey + "T00:00:00"));
-
-      const allExpired =
-        refDates.length === 0 ||
-        refDates.every((d) => d < archiveCutoff);
-
-      if (allExpired) {
-        deleteDoc(doc(db, `households/${householdId}/recipes`, recipe.id)).catch(console.error);
-        // ローカル状態はonSnapshotで自動更新されるので明示的なsetは不要
-      }
-    });
-  }, [loadingData, householdId, recipes, menus, menusServerConfirmedFor, recipesServerConfirmedFor]);
+  // 献立に使ったレシピは将来の分析に使うため、献立専用レシピも自動では削除しない（2026-10-10方針変更）。
 
   // ─── デフォルトカテゴリ初期書き込み ────────────────────────────────────────
   const initDefaultCategories = async (hid: string): Promise<void> => {
@@ -343,10 +290,12 @@ export function useFirestore(householdId: string | null) {
       setRecipesLocal((prev) => {
         const requestedNext = typeof updater === "function" ? updater(prev) : updater;
         const requestedIds = new Set(requestedNext.map((recipe) => recipe.id));
-        const retainedUrlRecipes = prev
-          .filter((recipe) => !requestedIds.has(recipe.id) && hasNonBlankUrl(recipe))
+        // setRecipesで外されたレシピは物理削除せず、一覧から外すだけにする。
+        // 物理削除は、献立で未使用と確認できたときだけ removeRecipe で行う。
+        const retainedRecipes = prev
+          .filter((recipe) => !requestedIds.has(recipe.id))
           .map((recipe) => ({ ...recipe, showInList: false }));
-        const next = [...requestedNext, ...retainedUrlRecipes];
+        const next = [...requestedNext, ...retainedRecipes];
         if (householdId) {
           // 追加・更新
           next.forEach((recipe) => {
@@ -356,18 +305,40 @@ export function useFirestore(householdId: string | null) {
               trackUserWrite(setDoc(doc(db, `households/${householdId}/recipes`, id), stripUndefined(data)), householdId);
             }
           });
-          // 削除
-          prev.forEach((recipe) => {
-            if (!next.find((r) => r.id === recipe.id)) {
-              trackUserWrite(deleteDoc(doc(db, `households/${householdId}/recipes`, recipe.id)), householdId);
-            }
-          });
         }
         return next;
       });
     },
     [householdId]
   );
+
+  // ─── レシピ一覧からの削除 ────────────────────────────────────────────────────
+  // 献立で使ったことがあるか（アプリが読み込んでいない過去の献立も含む）。
+  // オフラインのキャッシュでは過去の献立が欠けるため、サーバーから読む。確認できなければ「使った」とみなす。
+  const checkRecipeUsed = useCallback(async (recipe: Recipe): Promise<boolean> => {
+    if (!householdId) return true;
+    try {
+      const snap = await getDocsFromServer(collection(db, `households/${householdId}/menus`));
+      const allMenus: Menus = {};
+      snap.docs.forEach((d) => { allMenus[d.id] = (d.data().items ?? []) as MenuItem[]; });
+      return isRecipeUsedInMenus(recipe, allMenus);
+    } catch (err) {
+      console.error("[useFirestore] recipe usage check failed:", err);
+      return true;
+    }
+  }, [householdId]);
+
+  // keepData: true なら一覧から外すだけ（データは残す）、false なら物理削除する。
+  const removeRecipe = useCallback((recipeId: string, keepData: boolean): void => {
+    if (keepData) {
+      setRecipes((prev) => prev.filter((recipe) => recipe.id !== recipeId));
+      return;
+    }
+    setRecipesLocal((prev) => prev.filter((recipe) => recipe.id !== recipeId));
+    if (householdId) {
+      trackUserWrite(deleteDoc(doc(db, `households/${householdId}/recipes`, recipeId)), householdId);
+    }
+  }, [householdId, setRecipes]);
 
   // ─── setCategories（React.Dispatch互換） ─────────────────────────────────────
   const setCategories = useCallback(
@@ -428,6 +399,8 @@ export function useFirestore(householdId: string | null) {
     dismissSaveFailure,
     setMenus,
     setRecipes,
+    checkRecipeUsed,
+    removeRecipe,
     setCategories,
     saveRecipeWithMenu,
     saveRecipesWithMenus,
