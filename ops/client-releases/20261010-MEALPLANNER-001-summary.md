@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261010-MEALPLANNER-001
 app: meal-planner-app
-status: planned
+status: delivered
 source_commit: d8722d5a262e83c779147ca7944aefeaf52d7f38
-distribution_status: not_started
+distribution_status: published
 release_gate: user_approved
 server_change_notice: なし（本releaseはクライアントのみ。サーバー・APIの変更はない）
 
@@ -48,11 +48,22 @@ server_change_notice: なし（本releaseはクライアントのみ。サーバ
 
 ## 配信後の記録
 
-（配信後に追記する）
+配信日: 2026-10-10 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `1498f82` は実remote mainと一致し、`d8722d5..1498f82` のops以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| android-internal | `e582d83c-fdca-4597-aa9a-2af35e7ee091` | `exposdk:57.0.0` | android, ios |
+| default | `9f06716e-8905-4d54-bfb9-869502ec1010` | `exposdk:57.0.0` | android, ios |
+
+- Androidのupdate ID: android-internal `01a122a6-4be3-7e6f-bc5d-1933709b2749` / default `01a122a6-ff69-7838-a718-708e167e350a`。iOSのupdate ID: android-internal `01a122a6-4be3-7823-8665-7179a6c44fe4` / default `01a122a6-ff69-7f9e-925d-9b401ab214d0`。
+- EAS environment: `preview`。`--non-interactive`。どちらもexit 0。
+- **端末確認: 未実施**。確認する項目: ①アプリを完全に閉じて開き直し、新しいbundleが適用されること（家族の端末すべて。更新されるまで旧版の自動削除が動く）、②レシピ一覧で、献立に使ったレシピを削除しようとすると「献立で使ったことがあるため、一覧から外します」と出て、外した後も過去の献立から開けること、③使っていないレシピは「本当に削除しますか？」と出て削除できること、④AI相談で、料理名だけの料理が最初から選択され、「全部選ぶ／全部外す」が効くこと、⑤選んだ料理だけが提案日の献立の末尾に追加されること。
+- Expo Go（iOS）は `default`、Android実機は `android-internal` を読む。新しいbundleに切り替わるのは次回起動以降。
+- 結果: 「アプリ側の配信は完了／端末確認は未実施」。
 
 ## 承認と状態
 
 - app owner: 2026-10-10に前倒し配信を明示承認。
 - VPS management review: クライアントのみの変更で、サーバー変更通知は不要。
 - VPS production approval: 該当する操作なし。
-- client distribution: not_started。
+- client distribution: published（2026-10-10、EAS Update両channel。端末確認は未実施）。
