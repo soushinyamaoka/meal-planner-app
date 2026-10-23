@@ -35,3 +35,11 @@ server_change_notice: なし（本releaseはクライアントのみ。サーバ
 
 ## 配信後の記録
 
+配信日: 2026-10-23 JST。実施主体: Claude。配信時の working tree は clean、HEAD `a94bfb6` は実remote mainと一致。`--environment preview`、`--non-interactive`、どちらも exit 0。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| default | `945ffff1-8e7e-4b85-a60d-d45e2778608d` | `exposdk:58.0.0` | android, ios |
+| android-internal | `351d15de-8789-47c4-b95e-9867fb1835eb` | `exposdk:58.0.0` | android, ios |
+
+- 端末確認: 未実施。確認する項目: ①今日のごはんの長い料理名が折り返して全部見えること、②ヘッダーの「献立ノート」が1行で表示されること、③URLからレシピ名を取り込むとサイト名が付かないこと。
