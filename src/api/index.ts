@@ -83,10 +83,17 @@ export async function extractRecipe(url: string): Promise<RecipeExtractResponse 
   try {
     const res = await fetchWithTimeout(`${baseUrl}/api/recipe/extract?url=${encodeURIComponent(url)}`, {}, TIMEOUT_NORMAL);
     if (!res.ok) return null;
-    return res.json();
+    const data: RecipeExtractResponse = await res.json();
+    return data.title ? { ...data, title: cleanRecipeTitle(data.title) } : data;
   } catch {
     return null;
   }
+}
+
+// ページタイトルの「料理名｜サイト名 [説明]」から料理名だけを残す。区切りの前が空なら元のまま
+export function cleanRecipeTitle(title: string): string {
+  const head = title.split(/\s*[｜|]\s*/)[0].replace(/\s*[[［【][^\]］】]*[\]］】]\s*$/, "").trim();
+  return head || title.trim();
 }
 
 // タイトルのみ取得（URL入力時の自動補完用）

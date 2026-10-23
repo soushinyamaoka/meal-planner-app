@@ -209,10 +209,10 @@ export default function App() {
       <View style={s.header}>
         <Text style={s.headerIcon}>🍽️</Text>
         <View style={{ flex: 1 }}>
-          <Text style={s.title}>献立ノート</Text>
+          <Text style={s.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>献立ノート</Text>
           <Text style={s.subtitle}>毎日のごはんを、たのしく記録</Text>
         </View>
-        <View style={{ alignItems: "flex-end" }}>
+        <View style={{ alignItems: "flex-end", flexShrink: 1, maxWidth: 110 }}>
           <Text style={s.headerGreeting} numberOfLines={1}>{greeting.text} {greeting.emoji}</Text>
           <Text style={s.headerHouse} numberOfLines={1}>{household.name}</Text>
         </View>

@@ -66,7 +66,7 @@ setDoc(ref, stripUndefined(data));
 
 ## 技術スタック
 
-- React Native / Expo (SDK 57)
+- React Native / Expo (SDK 58)
 - TypeScript
 - Firebase Auth / Firestore（ログイン・世帯と献立・レシピ等の同期）
 - AsyncStorage（Firestoreデータのローカルキャッシュと認証状態の保持。Firestoreが正本）

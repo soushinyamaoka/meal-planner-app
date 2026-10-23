@@ -6,7 +6,7 @@
 
 | 構成要素 | 置き場所 | 本番の更新方法 | 本番の管理 |
 |---|---|---|---|
-| アプリ（meal-planner-app） | Expo SDK 57（React Native）。Android実機は EAS Build のAPK、iOSは Expo Go | **EAS Update**（OTA）。ネイティブ変更があるときだけ EAS Build | アプリ側（app owner の承認で Claude が実施） |
+| アプリ（meal-planner-app） | Expo SDK 58（React Native）。Android実機は EAS Build のAPK、iOSは Expo Go | **EAS Update**（OTA）。ネイティブ変更があるときだけ EAS Build | アプリ側（app owner の承認で Claude が実施） |
 | 献立・レシピ・世帯のデータ | Firebase（Auth・Firestore） | アプリから同期 | — |
 | coop-api（COOP注文メールの取込・API） | VPS1。runtime user `coop-api`、`127.0.0.1:8003`、HTTPSの入口経由で公開 | 変更通知書 → VPS管理のレビュー・承認 → VPS管理が反映 | VPS管理 |
 | レシピ生成・検索・抽出の各API | VPS1（recipe-generator・recipe-search・recipe-scraper） | 各リポジトリの手順と変更通知書 | VPS管理 |
