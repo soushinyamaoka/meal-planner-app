@@ -3,9 +3,9 @@
 record_type: client_release
 client_release_id: 20261023-MEALPLANNER-001
 app: meal-planner-app
-status: planned
+status: delivered
 source_commit: 25f13ac7d4bbd3fd90c4c74fdabfe0653538a74e
-distribution_status: not_started
+distribution_status: published
 release_gate: user_approved
 server_change_notice: なし（本releaseはクライアントのみ。サーバー・APIの変更はない）
 
@@ -46,11 +46,21 @@ Expo SDK 57 → 58 のアップグレード（`25f13ac`）。
 
 ## 配信後の記録
 
-（配信後に追記する）
+配信日: 2026-10-23 JST。実施主体: Claude（app ownerの明示承認後）。配信時のworking treeはclean、`git` HEAD `e2a929c` は実remote mainと一致し、`25f13ac..e2a929c` のops以外の差分は無し。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| default | `e72c78f1-ea39-4bcb-b813-41e89c0d616f` | `exposdk:58.0.0` | android, ios |
+
+- Androidのupdate ID: `01a16673-7e1f-76e1-85fa-d67f67ae973f`。iOSのupdate ID: `01a16673-7e1f-7539-a149-42734a2dbdf4`。
+- EAS environment: `preview`。`--non-interactive`。exit 0。
+- `android-internal` channel には配信していない（app ownerの指示で保留。既存APKはSDK 57のため、OTAでは届かない）。
+- **端末確認: 未実施**。確認する項目: ①iPhoneの Expo Go（SDK 58）でアプリが開けること（Expo Goを完全に閉じて開き直す）、②ログイン後、献立・レシピ・給食・COOPの各タブが表示されること、③レシピ編集画面とAI相談の入力欄で、キーボードが入力欄を隠さないこと、④お知らせが表示されること。
+- 結果: 「iOS向けの配信は完了／端末確認は未実施／Androidは保留」。
 
 ## 承認と状態
 
 - app owner: 2026-10-23に、main反映と `default` channel への配信を明示承認。Android（EAS Build・`android-internal`）は保留。
 - VPS management review: クライアントのみの変更で、サーバー変更通知は不要。
 - VPS production approval: 該当する操作なし。
-- client distribution: not_started。
+- client distribution: published（2026-10-23、`default` channel のみ。端末確認は未実施。Androidは保留）。
