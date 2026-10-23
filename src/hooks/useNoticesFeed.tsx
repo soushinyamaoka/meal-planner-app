@@ -37,7 +37,8 @@ export function useNoticesFeed() {
     const startTimer = (): void => { if (interval.current === null) interval.current = setInterval(() => { setClock(Date.now()); void refresh(false); }, 300_000); };
     const stopTimer = (): void => { if (interval.current !== null) { clearInterval(interval.current); interval.current = null; } };
     if (AppState.currentState === "active") startTimer();
-    let previous: AppStateStatus = AppState.currentState;
+    // RN 0.88では AppState.currentState の型が string | null | undefined になった
+    let previous: AppStateStatus | string | null | undefined = AppState.currentState;
     const subscription = AppState.addEventListener("change", state => {
       if (state !== "active") stopTimer();
       if (previous !== "active" && state === "active") { setClock(Date.now()); startTimer(); void refresh(false); }

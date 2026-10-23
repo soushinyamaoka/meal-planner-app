@@ -1,5 +1,5 @@
 import React, { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Keyboard, ScrollView, Share, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Keyboard, ScrollView, ScrollViewInstance, Share, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { formatDate, genId, getDateKey } from "../utils/helpers";
 import { buildAiMealPrompt, parseAiMealPlan, ParsedMeal } from "../utils/aiMealPlan";
 import { Menus, Recipe, MenuItem } from "../types";
@@ -35,7 +35,7 @@ export function AiMealPrompt({ draft, setDraft, selectedNames, menus, recipes, s
   const setUnreadable = (value: SetStateAction<string[]>) => updateField("unreadable", value);
   const setNotice = (value: SetStateAction<string>) => updateField("notice", value);
   const setExpanded = (value: SetStateAction<Set<string>>) => updateField("expanded", value);
-  const scrollRef = useRef<ScrollView | null>(null);
+  const scrollRef = useRef<ScrollViewInstance | null>(null);
   const previewY = useRef(0);
 
   // キーボードで入力欄が隠れないようにする。

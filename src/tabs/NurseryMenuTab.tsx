@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, ScrollViewInstance, TouchableOpacity, ActivityIndicator } from "react-native";
 import { getDateKey, formatDate, getEmoji } from "../utils/helpers";
 import { NurseryMenus } from "../types";
 import { s } from "../styles/appStyles";
@@ -18,7 +18,7 @@ type NurseryMenuTabProps = {
 export function NurseryMenuTab({ nurseryMenus, loading, error }: NurseryMenuTabProps) {
   const months = Array.from(new Set(Object.keys(nurseryMenus).map(k => k.slice(0, 7)))).sort();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const dateListRef = useRef<ScrollView>(null);
+  const dateListRef = useRef<ScrollViewInstance>(null);
   const dateCardPositionsRef = useRef<Record<string, number>>({});
   const hasInitialScrolledRef = useRef(false);
   const today = new Date();
