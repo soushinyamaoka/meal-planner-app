@@ -69,6 +69,13 @@ export function MealProposalScreen({ proposal, menus, recipes, saveRecipesWithMe
     if (!selected.has(dish.id) && !targetDates[dish.id]) setPickingDateFor(dish.id);
     setSelected(current => toggleIn(current, dish.id));
   };
+  // 日付を変えた料理は、その日の見出しの下へ移る。目の前から消えるので、画面下に移した先を出す
+  const moveDish = (dish: MealProposalDish, dateKey: string): void => {
+    setTargetDates(current => ({ ...current, [dish.id]: dateKey }));
+    setSelected(current => new Set(current).add(dish.id));
+    setPickingDateFor(null);
+    setNotice(`${dish.name}を${dateLabel(dateKey)}に移しました`);
+  };
   const selectAll = (): void => setSelected(new Set(allDishes.filter(({ dish }) => !isAdopted(dish.id)).map(({ dish }) => dish.id)));
 
   const apply = (): void => {
@@ -89,12 +96,23 @@ export function MealProposalScreen({ proposal, menus, recipes, saveRecipesWithMe
   const unadoptedCount = countUnadoptedDishes(proposal);
   const undatedSelected = allDishes.some(({ dish }) => selected.has(dish.id) && !isAdopted(dish.id) && !targetDates[dish.id]);
 
-  const renderDish = (dish: MealProposalDish) => {
+  // 提案された日ではなく、入れる日（追加済みなら追加した日）ごとに並べる。日付が決まっていない料理は最後にまとめる
+  const sections = useMemo(() => {
+    const groups = new Map<string, { dish: MealProposalDish; proposedDate: string }[]>();
+    allDishes.forEach(entry => {
+      const key = proposal.adoptions[entry.dish.id]?.dateKey ?? targetDates[entry.dish.id] ?? "";
+      groups.set(key, [...(groups.get(key) ?? []), entry]);
+    });
+    return [...groups.entries()].sort(([a], [b]) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
+  }, [allDishes, proposal.adoptions, targetDates]);
+
+  const renderDish = ({ dish, proposedDate }: { dish: MealProposalDish; proposedDate: string }) => {
     const adoption = proposal.adoptions[dish.id];
     const isSelected = selected.has(dish.id);
     const target = targetDates[dish.id];
     const registered = recipes.some(r => r.showInList !== false && r.name === dish.name);
-    const targetExisting = target ? menus[target] ?? [] : [];
+    const moved = !adoption && !!target && target !== proposedDate;
+    const canRestore = selectableDateKeys.includes(proposedDate);
     return (
       <View key={dish.id} style={{ marginTop: 6, padding: 10, backgroundColor: "#fff", borderRadius: 10, borderWidth: 1, borderColor: isSelected ? "#e8956e" : "#f0e6dc", opacity: adoption ? 0.65 : 1 }}>
         <TouchableOpacity disabled={!!adoption} onPress={() => toggleDish(dish)} style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
@@ -111,6 +129,16 @@ export function MealProposalScreen({ proposal, menus, recipes, saveRecipesWithMe
           <Text style={{ color: "#397044", fontSize: 12, marginTop: 4 }}>✓ {dateLabel(adoption.dateKey)}に追加済み</Text>
         ) : (
           <>
+            {moved && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                <Text style={{ color: "#8a7e72", fontSize: 12 }}>↪ {dateLabel(proposedDate)}の提案から移動</Text>
+                {canRestore && (
+                  <TouchableOpacity onPress={() => moveDish(dish, proposedDate)} hitSlop={8}>
+                    <Text style={{ color: "#8a5b45", fontSize: 12, fontWeight: "600", textDecorationLine: "underline" }}>戻す</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
             {registered && <Text style={{ color: "#587a54", fontSize: 12, marginTop: 4 }}>📖 同じ名前の登録済みレシピを使います</Text>}
             <TouchableOpacity onPress={() => setExpanded(current => toggleIn(current, dish.id))} style={{ marginTop: 4 }}>
               <Text style={{ color: "#6a5d50", fontSize: 12 }}>材料{dish.ingredients.length}品・手順{dish.steps.length} {expanded.has(dish.id) ? "▾" : "▸ 作り方を見る"}</Text>
@@ -132,15 +160,12 @@ export function MealProposalScreen({ proposal, menus, recipes, saveRecipesWithMe
             {pickingDateFor === dish.id && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }} contentContainerStyle={{ gap: 6 }}>
                 {selectableDateKeys.map(key => (
-                  <TouchableOpacity key={key} onPress={() => { setTargetDates(current => ({ ...current, [dish.id]: key })); setPickingDateFor(null); }}
+                  <TouchableOpacity key={key} onPress={() => (key === target ? setPickingDateFor(null) : moveDish(dish, key))}
                     style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 14, backgroundColor: key === target ? "#d4725c" : "#f5ebe2" }}>
                     <Text style={{ fontSize: 12, color: key === target ? "#fff" : "#6a5d50" }}>{dateLabel(key)}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            )}
-            {target && targetExisting.length > 0 && (
-              <Text style={{ color: "#587a54", fontSize: 12, marginTop: 4 }}>この日の献立：{targetExisting.map(x => x.name).join("、")}（残したまま追加します）</Text>
             )}
           </>
         )}
@@ -157,30 +182,39 @@ export function MealProposalScreen({ proposal, menus, recipes, saveRecipesWithMe
         </View>
         <Text style={{ color: "#8a7e72", fontSize: 13 }}>{dateLabel(proposal.periodStart)}〜{dateLabel(proposal.periodEnd)}の提案・未採用 {unadoptedCount}品</Text>
         {proposal.comment ? <Text style={{ marginTop: 8, padding: 10, color: "#5a4a3c", backgroundColor: "#fff7ef", borderRadius: 8, fontSize: 13 }}>💬 {proposal.comment}</Text> : null}
-        {notice ? <Text style={{ marginTop: 8, padding: 10, color: "#397044", backgroundColor: "#edf7ec", borderRadius: 8 }}>{notice}</Text> : null}
         {unadoptedCount > 0 && (
           <View style={{ flexDirection: "row", gap: 14, marginTop: 10 }}>
             <TouchableOpacity onPress={selectAll}><Text style={{ color: "#8a5b45", fontSize: 13, fontWeight: "600" }}>全部選ぶ</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => setSelected(new Set())}><Text style={{ color: "#8a5b45", fontSize: 13, fontWeight: "600" }}>全部外す</Text></TouchableOpacity>
           </View>
         )}
-        {proposal.days.map(day => (
-          <View key={day.date} style={{ marginTop: 12 }}>
-            <Text style={{ fontWeight: "700", color: "#4a3f36" }}>{dateLabel(day.date)}の提案</Text>
-            {day.dishes.map(renderDish)}
-          </View>
-        ))}
+        {sections.map(([dateKey, entries]) => {
+          const existing = dateKey ? menus[dateKey] ?? [] : [];
+          const hasPending = entries.some(({ dish }) => !isAdopted(dish.id));
+          return (
+            <View key={dateKey || "undated"} style={{ marginTop: 12 }}>
+              <Text style={{ fontWeight: "700", color: dateKey ? "#4a3f36" : "#c0564e" }}>{dateKey ? dateLabel(dateKey) : "日付が決まっていない料理"}</Text>
+              {hasPending && existing.length > 0 && (
+                <Text style={{ color: "#587a54", fontSize: 12, marginTop: 2 }}>この日の献立：{existing.map(x => x.name).join("、")}（残したまま追加します）</Text>
+              )}
+              {entries.map(renderDish)}
+            </View>
+          );
+        })}
         <TouchableOpacity onPress={confirmDismiss} style={{ marginTop: 20, padding: 10, alignItems: "center", backgroundColor: "#f5ebe2", borderRadius: 9 }}>
           <Text style={{ color: "#8a7e72", fontSize: 13, fontWeight: "600" }}>この提案を閉じる</Text>
         </TouchableOpacity>
       </ScrollView>
-      {unadoptedCount > 0 && (
+      {(unadoptedCount > 0 || notice) && (
         <View style={{ padding: 12, paddingBottom: 14, borderTopWidth: 1, borderTopColor: "#f0e6dc", backgroundColor: "#faf5ef" }}>
-          {undatedSelected && <Text style={{ color: "#c0564e", fontSize: 12, marginBottom: 6, textAlign: "center" }}>日付が決まっていない料理は反映しません</Text>}
-          <TouchableOpacity onPress={apply} disabled={picks.length === 0}
-            style={{ padding: 13, alignItems: "center", backgroundColor: "#d4725c", borderRadius: 10, opacity: picks.length === 0 ? 0.5 : 1 }}>
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>選んだ{picks.length}品を献立に反映</Text>
-          </TouchableOpacity>
+          {notice ? <Text style={{ color: "#397044", fontSize: 12, marginBottom: 6, textAlign: "center" }}>{notice}</Text> : null}
+          {unadoptedCount > 0 && undatedSelected && <Text style={{ color: "#c0564e", fontSize: 12, marginBottom: 6, textAlign: "center" }}>日付が決まっていない料理は反映しません</Text>}
+          {unadoptedCount > 0 && (
+            <TouchableOpacity onPress={apply} disabled={picks.length === 0}
+              style={{ padding: 13, alignItems: "center", backgroundColor: "#d4725c", borderRadius: 10, opacity: picks.length === 0 ? 0.5 : 1 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>選んだ{picks.length}品を献立に反映</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
