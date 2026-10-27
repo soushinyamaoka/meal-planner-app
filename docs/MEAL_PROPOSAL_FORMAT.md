@@ -9,7 +9,7 @@
 ## 受け渡しの流れ
 
 1. Codex が提案ファイルを受け取りフォルダに置く。
-2. 取り込みスクリプト `scripts/importMealProposal.mjs` を、タスクスケジューラから定期実行する。形式をチェックして、Firestore の `households/{世帯}/mealProposals/{proposalId}` に書き込む。
+2. 取り込みスクリプト `scripts/importMealProposal.mjs` を、タスクスケジューラから毎週水曜 6:00 に実行する（下の「取り込みの予定」）。形式をチェックして、Firestore の `households/{世帯}/mealProposals/{proposalId}` に書き込む。
 3. アプリで提案を見て、採用する料理と日付を選び、献立に反映する。
 
 Firestore のログイン情報（`.env`）は取り込みスクリプトだけが使う。Codex には渡さない。
@@ -111,6 +111,16 @@ node scripts/importMealProposal.mjs docs/meal-proposal.sample.json --dry-run
 ```
 
 終了コードは、全部取り込めたとき（または取り込むものが無いとき）に0、不合格や書き込み失敗が1件でもあれば1。
+
+## 取り込みの予定
+
+献立はアプリに水曜の朝に出す（app ownerの決定、2026-10-27）。
+
+- Codex: 火曜の早朝までに、その週の水曜から始まる提案（`periodStart` = 水曜、`proposalId` も同じ）を受け取りフォルダに置く。
+- 取り込み: タスクスケジューラのタスク `MealPlanner-ImportMealProposal` が、毎週水曜 6:00 に `scripts/run-meal-proposal-import.cmd` を実行する。
+  - PCが止まっていて時刻を逃したときは、次に起動したときに実行する。書き込みに失敗したときは30分おきに3回まで再試行する。
+  - 実行結果は `meal-planner/data/meal-proposals/logs/import.log` に追記する（料理名が入るのでリポジトリの外）。
+- 水曜 6:00 より後に置かれたファイルは、翌週の水曜まで取り込まれない。急ぐときは手で取り込みスクリプトを実行する。
 
 ## アプリ側に追加される状態（参考）
 
