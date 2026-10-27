@@ -94,7 +94,8 @@ meal-planner-app/
 ├── docs/
 │   ├── API_SPEC.md              ← COOP連携API仕様書
 │   ├── MOCK_IMPLEMENTATIONS.md ← 仮実装の現状と残存サンプル
-│   └── RELEASE_AND_DEPLOY.md   ← リリース・デプロイ手順（EAS Update、サーバーの変更通知書、Codexへの依頼）
+│   ├── RELEASE_AND_DEPLOY.md   ← リリース・デプロイ手順（EAS Update、サーバーの変更通知書、Codexへの依頼）
+│   └── MEAL_PROPOSAL_FORMAT.md ← AI献立提案ファイルの形式と受け渡し（Codex生成→scripts/importMealProposal.mjsで取り込み）
 └── package.json
 ```
 
