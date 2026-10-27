@@ -118,7 +118,7 @@ node scripts/importMealProposal.mjs docs/meal-proposal.sample.json --dry-run
 
 - Codex: 火曜の早朝までに、その週の水曜から始まる提案（`periodStart` = 水曜、`proposalId` も同じ）を受け取りフォルダに置く。
 - 取り込み: タスクスケジューラのタスク `MealPlanner-ImportMealProposal` が、毎週水曜 6:00 に `scripts/run-meal-proposal-import.cmd` を実行する。
-  - PCが止まっていて時刻を逃したときは、次に起動したときに実行する。書き込みに失敗したときは30分おきに3回まで再試行する。
+  - Windowsにサインインしているあいだだけ動く（画面ロック中は動く。登録は管理者権限なしで行うため）。PCが止まっていた・サインアウトしていたときは、次に起動・サインインしたときに実行する。書き込みに失敗したときは30分おきに3回まで再試行する。
   - 実行結果は `meal-planner/data/meal-proposals/logs/import.log` に追記する（料理名が入るのでリポジトリの外）。
 - 水曜 6:00 より後に置かれたファイルは、翌週の水曜まで取り込まれない。急ぐときは手で取り込みスクリプトを実行する。
 
