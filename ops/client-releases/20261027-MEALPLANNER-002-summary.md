@@ -32,3 +32,14 @@ AI献立提案の画面の見た目の修正（`03784cd`）。
 ## 直前の安定版・rollback
 
 - `default`: `f2c2d162-971f-4ac7-89e5-362f4d6b2e8f`。`android-internal`: `520c2005-7264-41a1-b2cc-546cf039a482`（ともに 20261027-MEALPLANNER-001）。
+
+## 配信後の記録
+
+配信日: 2026-10-27 JST。実施主体: Claude。配信時の working tree は clean、HEAD `0aabbc7` は実remote mainと一致。`--environment preview`、`--non-interactive`、どちらも exit 0。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| default | `9b4bd9d2-b59d-4b7f-a08d-8a19ab6f2ed7` | `exposdk:58.0.0` | android, ios |
+| android-internal | `5c2899a3-d037-433a-9c2b-d88e6bae7098` | `exposdk:58.0.0` | android, ios |
+
+- 端末確認: 未実施。日付を変えると料理がその日の見出しへ移ること、「戻す」、画面下の表示を確認する。
