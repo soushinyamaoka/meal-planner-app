@@ -2,12 +2,14 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity, SafeAreaView, ActivityIndicator, Platform, StatusBar as NativeStatusBar } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { StatusBar } from "expo-status-bar";
-import { genId, getGreeting } from "./src/utils/helpers";
+import { genId, getGreeting, getDateKey } from "./src/utils/helpers";
 import { Recipe, RecipeFormData, MenuItem, ModalState } from "./src/types";
 import { useAuth } from "./src/hooks/useAuth";
 import { useHousehold } from "./src/hooks/useHousehold";
 import { useFirestore } from "./src/hooks/useFirestore";
 import { useNurseryMenus } from "./src/hooks/useNurseryMenus";
+import { useMealProposals, countUnadoptedDishes } from "./src/hooks/useMealProposals";
+import { MealProposalBanner, MealProposalScreen } from "./src/components/MealProposal";
 import { clearHouseholdCache } from "./src/utils/localCache";
 import LoginScreen from "./src/screens/LoginScreen";
 import { HouseholdSetupScreen, HouseholdSettingsPanel, ApiSettingsPanel } from "./src/screens/HouseholdScreen";
@@ -45,6 +47,8 @@ export default function App() {
   const { household, loadingHousehold, pendingInvite, loadError: householdError, createHousehold, joinHousehold, declineInvite, inviteByEmail } = useHousehold(user);
   const { menus, setMenus, recipes, setRecipes, checkRecipeUsed, removeRecipe, categories, setCategories, saveRecipeWithMenu, saveRecipesWithMenus, loadingData, loadError: dataError, saveError, dismissSaveFailure } = useFirestore(household?.id ?? null);
   const { nurseryMenus, loadingNurseryMenus, nurseryMenuError } = useNurseryMenus(household?.id ?? null);
+  const { proposals, proposalError, markOpened, dismissProposal, recordAdoptions } = useMealProposals(household?.id ?? null);
+  const [openProposalId, setOpenProposalId] = useState<string | null>(null);
   const notices = useNoticesFeed();
   const [noticesOpen, setNoticesOpen] = useState(false);
   const openNotices = (): void => { notices.markVisibleRead(); setNoticesOpen(true); };
@@ -198,7 +202,11 @@ export default function App() {
     setModalState(null);
   };
 
-  const clearModals = (): void => { setModalState(null); setEditingRecipe(null); setViewRecipe(null); setAddToMealRecipe(null); };
+  const clearModals = (): void => { setModalState(null); setEditingRecipe(null); setViewRecipe(null); setAddToMealRecipe(null); setOpenProposalId(null); };
+  // お知らせに出すのは、閉じられておらず、期間が終わっておらず、未採用の料理が残っている最新の提案
+  const todayKey = getDateKey(new Date());
+  const bannerProposal = proposals.find(p => p.status !== "dismissed" && p.periodEnd >= todayKey && countUnadoptedDishes(p) > 0) ?? null;
+  const openProposal = openProposalId ? proposals.find(p => p.proposalId === openProposalId) ?? null : null;
   const greeting = getGreeting();
 
   return (
@@ -249,10 +257,24 @@ export default function App() {
       </View>
 
       {/* Content */}
-      {tab === "meals" && (
-        <MealsTab menus={menus} setMenus={setMenus} recipes={recipes}
-          onChipTap={handleChipTap}
-          onManualAdd={(dateKey) => setModalState({ mode: "create-for-meal", dateKey, prefillName: "" })} />
+      {tab === "meals" && openProposal && (
+        <MealProposalScreen proposal={openProposal} menus={menus} recipes={recipes}
+          saveRecipesWithMenus={saveRecipesWithMenus}
+          onAdopted={(adoptions) => recordAdoptions(openProposal, adoptions)}
+          onDismiss={() => { dismissProposal(openProposal.proposalId); setOpenProposalId(null); }}
+          onBack={() => setOpenProposalId(null)} />
+      )}
+      {tab === "meals" && !openProposal && (
+        <>
+          {proposalError && <Text style={{ marginHorizontal: 14, marginTop: 4, color: "#c0564e", fontSize: 12 }}>{proposalError}</Text>}
+          {bannerProposal && (
+            <MealProposalBanner proposal={bannerProposal}
+              onOpen={() => { markOpened(bannerProposal); setOpenProposalId(bannerProposal.proposalId); }} />
+          )}
+          <MealsTab menus={menus} setMenus={setMenus} recipes={recipes}
+            onChipTap={handleChipTap}
+            onManualAdd={(dateKey) => setModalState({ mode: "create-for-meal", dateKey, prefillName: "" })} />
+        </>
       )}
       {tab === "nursery" && (
         <NurseryMenuTab

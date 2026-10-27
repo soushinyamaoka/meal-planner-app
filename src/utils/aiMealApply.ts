@@ -40,7 +40,7 @@ export function buildAiMealAppend(options: {
     let recipeId = registered?.id;
     if (!recipeId && dish.ingredients.length > 0 && dish.steps.length > 0) {
       recipeId = recipeIds[dish.name];
-      // 記録したレシピが、すでに削除されている場合は使わない（参照されない献立専用レシピは自動で削除されるため）。
+      // 記録したレシピが、すでに削除されている場合は使わない（レシピ一覧から削除されたレシピなど）。
       // この呼び出しで作ったレシピ（created）は、まだ保存前なのでrecipesには無いが、有効とみなす。
       if (recipeId && !created.has(dish.name) && !options.recipes.some(recipe => recipe.id === recipeId)) recipeId = undefined;
       if (!recipeId) {

@@ -45,6 +45,30 @@ export type NurseryMenuDay = { menu: string[]; snack: string[] };
 export type NurseryMenus = Record<string, NurseryMenuDay>;
 export type NurseryMenuParseResult = { year: number; month: number; days: NurseryMenus };
 
+// AI献立提案（households/{householdId}/mealProposals）。書き込み元は scripts/importMealProposal.mjs、形式は docs/MEAL_PROPOSAL_FORMAT.md
+export type MealProposalRole = "main" | "side" | "soup" | "other";
+export type MealProposalDish = {
+  id: string;
+  name: string;
+  role: MealProposalRole;
+  ingredients: string[];
+  steps: string[];
+  coopItems?: string[];
+  note?: string;
+};
+export type MealProposalAdoption = { dateKey: string; recipeId: string; adoptedAt: string };
+export type MealProposalStatus = "new" | "opened" | "done" | "dismissed";
+export type MealProposal = {
+  proposalId: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  comment?: string;
+  days: { date: string; dishes: MealProposalDish[] }[];
+  status: MealProposalStatus;
+  adoptions: Record<string, MealProposalAdoption>;
+};
+
 export type CoopItem = {
   order_no: string;
   name: string;
