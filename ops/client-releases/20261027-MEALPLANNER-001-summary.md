@@ -36,3 +36,11 @@ AI献立提案の画面（`6f2fcfd`）。提案の形式・取り込みスクリ
 
 ## 配信後の記録
 
+配信日: 2026-10-27 JST。実施主体: Claude。配信時の working tree は clean、HEAD `b05aba0` は実remote mainと一致。`--environment preview`、`--non-interactive`、どちらも exit 0。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| default | `f2c2d162-971f-4ac7-89e5-362f4d6b2e8f` | `exposdk:58.0.0` | android, ios |
+| android-internal | `520c2005-7264-41a1-b2cc-546cf039a482` | `exposdk:58.0.0` | android, ios |
+
+- 端末確認: 未実施（提案が無いので画面の変化は無い）。最初の本物の提案を取り込んだ時に確認する項目: ①献立タブにお知らせが出る、②提案画面の表示（作り方の開閉、日付の変更）、③反映で献立に追加され「追加済み」になる、④Firestoreの \`adoptions\`・\`status\` が更新される、⑤「この提案を閉じる」でお知らせが消える。
