@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useKeepAwake } from "expo-keep-awake";
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Linking } from "react-native";
 import { searchRecipeFromWeb } from "../api";
 import { Recipe, WebSearchItem } from "../types";
@@ -10,6 +11,8 @@ import { s } from "../styles/appStyles";
 type RecipeDetailContentProps = { recipe: Recipe };
 
 export function RecipeDetailContent({ recipe }: RecipeDetailContentProps) {
+  // 料理しながら見るので、レシピを開いているあいだは画面を消さない（閉じると元に戻る）
+  useKeepAwake();
   return (
     <View>
       <Text style={s.sectionLabel}>🥕 材料（{recipe.ingredients.length}品）</Text>
