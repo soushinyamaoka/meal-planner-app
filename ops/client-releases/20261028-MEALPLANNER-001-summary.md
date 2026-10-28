@@ -31,3 +31,14 @@ server_change_notice: なし（本releaseはクライアントのみ。サーバ
 ## 直前の安定版・rollback
 
 - `default`: `9b4bd9d2-b59d-4b7f-a08d-8a19ab6f2ed7`。`android-internal`: `5c2899a3-d037-433a-9c2b-d88e6bae7098`（ともに 20261027-MEALPLANNER-002）。
+
+## 配信後の記録
+
+配信日: 2026-10-28 JST。実施主体: Claude。配信時の working tree は clean、HEAD `30d1e17` は実remote mainと一致。`--environment preview`、`--non-interactive`、どちらも exit 0。
+
+| channel | update group ID | runtime | platform |
+|---|---|---|---|
+| default | `4e5cc092-1a42-4019-a632-91a942159038` | `exposdk:58.0.0` | android, ios |
+| android-internal | `2ec18525-fec0-4fe1-99f2-42229e606270` | `exposdk:58.0.0` | android, ios |
+
+- 端末確認: 未実施。レシピ詳細を開いたまま、端末の自動消灯の時間を過ぎても画面が消えないこと、閉じると元に戻ることを確認する。
