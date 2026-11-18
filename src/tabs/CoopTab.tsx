@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking } from "react-native";
 import { getDateKey, formatDate, getEmoji, genId } from "../utils/helpers";
-import { formatCoopOrderAmount, formatCoopOrderDate, getCoopOrderDateLabel } from "../utils/coopOrderFormatting";
+import { describeCoopFetchFailure, formatCoopOrderAmount, formatCoopOrderDate, getCoopOrderDateLabel } from "../utils/coopOrderFormatting";
 import { fetchCoopIngredients, triggerCoopFetch, suggestCoopRecipes, createCoopMealPlan, classifyCoopProduct } from "../api";
 import { COOP_CATEGORIES } from "../data/sampleData";
 import { Recipe, Menus, MenuItem, CoopData, CoopCategoryKey, SuggestResult, SuggestRecipe, PlanResult, PlanDayItem } from "../types";
@@ -102,6 +102,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
       const fetchResult = await triggerCoopFetch(14);
       if (fetchResult.status === "no_data") fetchMessage = "新しい注文データが見つかりませんでした。保存済み一覧を表示しています。";
       else if (fetchResult.status === "busy") fetchMessage = "別の取込処理を実行中です。保存済み一覧を表示しています。";
+      else if (fetchResult.status === "error") fetchMessage = `メール取得に失敗しました: ${fetchResult.message}`;
       else fetchMessage = "メール取得を完了しました。";
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -441,6 +442,7 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
   const selectedNames = getSelectedNames();
   const totalItems = COOP_CATEGORIES.reduce((sum, cat) => sum + (coopData[cat.key] || []).length, 0);
   const orderAmount = formatCoopOrderAmount(coopData.total_amount_tax_included);
+  const fetchFailure = describeCoopFetchFailure(coopData.fetch_status);
 
   return (
     <View style={{ flex: 1 }}>
@@ -462,6 +464,11 @@ export function CoopTab({ recipes, setRecipes, menus, setMenus, saveRecipesWithM
             }
           </TouchableOpacity>
         </View>
+        {fetchFailure && (
+          <View style={{ padding: 10, backgroundColor: "#fdeeed", borderRadius: 10, borderWidth: 1, borderColor: "#e8a29a", marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#c0564e" }}>⚠ {fetchFailure}</Text>
+          </View>
+        )}
         {shortcutButtons}
         {error && (
           <View style={{ padding: 10, backgroundColor: "#fdeeed", borderRadius: 10, marginBottom: 8, gap: 8 }}>

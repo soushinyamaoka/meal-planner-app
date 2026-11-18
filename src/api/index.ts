@@ -128,16 +128,28 @@ export async function fetchCoopOrderHistory(): Promise<CoopOrderHistoryResponse>
  * POST /api/coop/fetch
  *
  * @param daysBack - 遡る日数（デフォルト14）
- * @returns { status: "success" | "no_data" | "busy", message: string, orders?: number }
+ * @returns { status: "success" | "no_data" | "busy" | "error", message: string, orders?: number, errorKind?: string }
  *   busy: 別の取込処理（定期取得など）が実行中のため、今回の取得は行われなかった
+ *   error: Gmailにログインできない等で取得に失敗した（サーバーは502で失敗の種類を返す。古いサーバーは no_data を返す）
  */
-export async function triggerCoopFetch(daysBack: number = 14): Promise<{ status: "success" | "no_data" | "busy"; message: string; orders?: number }> {
+export async function triggerCoopFetch(daysBack: number = 14): Promise<{ status: "success" | "no_data" | "busy" | "error"; message: string; orders?: number; errorKind?: string }> {
   const { url, token } = await getCoopConfig();
   const res = await fetchWithTimeout(`${url}/api/coop/fetch?days_back=${daysBack}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   }, TIMEOUT_NORMAL);
   if (res.status === 401) throw new Error("認証に失敗しました。トークンを確認してください。");
+  if (res.status === 502) {
+    const body: unknown = await res.json().catch(() => null);
+    if (body && typeof body === "object" && (body as { status?: unknown }).status === "error") {
+      const { detail, error_kind } = body as { detail?: unknown; error_kind?: unknown };
+      return {
+        status: "error",
+        message: typeof detail === "string" && detail ? detail : "メールを取得できませんでした。",
+        ...(typeof error_kind === "string" ? { errorKind: error_kind } : {}),
+      };
+    }
+  }
   if (!res.ok) throw new Error(`サーバーエラー (${res.status})`);
   return res.json();
 }

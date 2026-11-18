@@ -99,6 +99,16 @@ export type CoopData = {
   baby_food: CoopItem[];
   seasonings: CoopItem[];
   excluded: { name: string; reason: string }[];
+  // メールの通常取込（定期・手動）の直近の結果。古いAPIでは無い、記録前は null
+  fetch_status?: CoopFetchStatus | null;
+};
+
+export type CoopFetchStatus = {
+  last_attempt_at: string;
+  last_result: "success" | "failure";
+  last_error_kind: string | null;
+  last_success_at: string | null;
+  consecutive_failures: number;
 };
 
 export type CoopOrderHistoryItem = { name: string; original_name?: string; quantity: number; category: string };
